@@ -23,6 +23,7 @@ extern "C" {
 
 extern int TdiConvert(mdsdsc_a_t * dsc, mdsdsc_a_t * convert);
 extern int TdiIntrinsic(opcode_t opcode, int narg, mdsdsc_t *list[], mdsdsc_xd_t *out_ptr);
+extern int _TdiIntrinsic(void **ctx, opcode_t opcode, int narg, mdsdsc_t *list[], mdsdsc_xd_t *out_ptr);
 // #include <tdishr.h>
 
 } // extern "C"
@@ -128,6 +129,8 @@ enum class DType : uint8_t
     Opaque = DTYPE_OPAQUE,
 
 }; // enum class DType
+
+std::string to_string(const DType& dtype);
 
 struct TreeNodeFlags
 {
@@ -552,6 +555,11 @@ public:
     }
 
     [[nodiscard]]
+    inline void ** getPDBID() {
+        return &_dbid;
+    }
+
+    [[nodiscard]]
     inline std::string getTreeName() const {
         return _treename;
     }
@@ -611,8 +619,9 @@ public:
 
     inline Data() = default;
 
-    inline Data(mdsdsc_xd_t && xd)
+    inline Data(mdsdsc_xd_t && xd, Tree * tree = nullptr)
         : _xd(xd)
+        , _tree(tree)
     {
         xd = MDSDSC_XD_INITIALIZER;
     }
@@ -629,11 +638,15 @@ public:
     inline Data(Data&& other) {
         _xd = other._xd;
         other._xd = MDSDSC_XD_INITIALIZER;
+        _tree = other._tree;
+        other._tree = nullptr;
     }
 
     Data& operator=(Data&& other) {
         _xd = other._xd;
         other._xd = MDSDSC_XD_INITIALIZER;
+        _tree = other._tree;
+        other._tree = nullptr;
         return *this;
     }
 
@@ -649,8 +662,15 @@ public:
             .pointer = (char *)&equal
         };
 
+        // TODO: _tree != other._tree?
+
         mdsdsc_t * args[] = { getDescriptor(), other.getDescriptor() };
-        status = TdiIntrinsic(OPC_EQ, 2, args, (mdsdsc_xd_t *)&out);
+        if (hasTree()) {
+            status = _TdiIntrinsic(getTree()->getPDBID(), OPC_EQ, 2, args, (mdsdsc_xd_t *)&out);
+        }
+        else {
+            status = TdiIntrinsic(OPC_EQ, 2, args, (mdsdsc_xd_t *)&out);
+        }
         if (IS_NOT_OK(status)) {
             throwException(status);
         }
@@ -661,6 +681,18 @@ public:
     template <typename T, std::enable_if_t<std::is_base_of_v<Data, T>, bool> = true>
     inline bool operator!=(const T& other) const {
         return !(*this == other);
+    }
+
+    inline void setTree(Tree * tree) {
+        _tree = tree;
+    }
+
+    inline Tree * getTree() const {
+        return _tree;
+    }
+
+    inline bool hasTree() const {
+        return (_tree != nullptr);
     }
 
     [[nodiscard]]
@@ -734,6 +766,8 @@ protected:
 
     mdsdsc_xd_t _xd = MDSDSC_XD_INITIALIZER;
 
+    Tree * _tree = nullptr;
+
     template <typename T>
     inline T _clone() const {
         int status;
@@ -744,7 +778,7 @@ protected:
             throwException(status);
         }
 
-        return T(std::move(xd));
+        return T(std::move(xd), getTree());
     }
 
 }; // class Data
@@ -772,12 +806,13 @@ public:
 
     Scalar() = default;
 
-    Scalar(mdsdsc_xd_t && xd)
-        : Data(std::move(xd))
+    Scalar(mdsdsc_xd_t && xd, Tree * tree = nullptr)
+        : Data(std::move(xd), tree)
     { }
 
-    Scalar(__ctype value) {
+    Scalar(__ctype value, Tree * tree = nullptr) {
         setValue(value);
+        setTree(tree);
     }
 
     Scalar(Scalar&&) = default;
@@ -942,8 +977,8 @@ public:
 
     Array() = default;
 
-    inline Array(mdsdsc_xd_t && xd)
-        : Data(std::move(xd))
+    inline Array(mdsdsc_xd_t && xd, Tree * tree = nullptr)
+        : Data(std::move(xd), tree)
     {
         mdsdsc_a_t * dsc = (mdsdsc_a_t *)getDescriptor();
         if (dsc && dsc->length == 0) {
@@ -951,13 +986,15 @@ public:
         }
     }
 
-    inline Array(std::initializer_list<__ctype> values, const std::vector<uint32_t>& dims = {}) {
+    inline Array(std::initializer_list<__ctype> values, const std::vector<uint32_t>& dims = {}, Tree * tree = nullptr) {
         std::vector<__ctype> tmp(values);
         setValues(tmp, dims);
+        setTree(tree);
     }
 
-    inline Array(const std::span<const __ctype> values, const std::vector<uint32_t>& dims = {}) {
+    inline Array(const std::span<const __ctype> values, const std::vector<uint32_t>& dims = {}, Tree * tree = nullptr) {
         setValues(values, dims);
+        setTree(tree);
     }
 
     Array(Array&&) = default;
@@ -1089,16 +1126,16 @@ public:
 
     UInt8Array() = default;
 
-    inline UInt8Array(mdsdsc_xd_t && xd)
-        : Array(std::move(xd))
+    inline UInt8Array(mdsdsc_xd_t && xd, Tree * tree = nullptr)
+        : Array(std::move(xd), tree)
     { }
 
-    inline UInt8Array(std::initializer_list<__ctype> values, const std::vector<uint32_t>& dims = {})
-        : Array(values, dims)
+    inline UInt8Array(std::initializer_list<__ctype> values, const std::vector<uint32_t>& dims = {}, Tree * tree = nullptr)
+        : Array(values, dims, tree)
     { }
 
-    inline UInt8Array(const std::span<const __ctype> values, const std::vector<uint32_t>& dims = {})
-    : Array(values, dims)
+    inline UInt8Array(const std::span<const __ctype> values, const std::vector<uint32_t>& dims = {}, Tree * tree = nullptr)
+        : Array(values, dims, tree)
     { }
 
     template <typename T>
@@ -1225,12 +1262,13 @@ public:
 
     String() = default;
 
-    String(mdsdsc_xd_t && xd)
-        : Data(std::move(xd))
+    String(mdsdsc_xd_t && xd, Tree * tree = nullptr)
+        : Data(std::move(xd), tree)
     { }
 
-    inline String(std::string_view value) {
+    inline String(std::string_view value, Tree * tree = nullptr) {
         setValue(value);
+        setTree(tree);
     }
 
     String(String&&) = default;
@@ -1279,17 +1317,19 @@ public:
 
     StringArray() = default;
 
-    inline StringArray(mdsdsc_xd_t && xd)
-        : Data(std::move(xd))
+    inline StringArray(mdsdsc_xd_t && xd, Tree * tree = nullptr)
+        : Data(std::move(xd), tree)
     { }
 
-    inline StringArray(std::span<std::string> values, const std::vector<uint32_t>& dims = {}) {
+    inline StringArray(std::span<std::string> values, const std::vector<uint32_t>& dims = {}, Tree * tree = nullptr) {
         setValues(values, dims);
+        setTree(tree);
     }
 
-    inline StringArray(std::initializer_list<std::string> values, const std::vector<uint32_t>& dims = {}) {
+    inline StringArray(std::initializer_list<std::string> values, const std::vector<uint32_t>& dims = {}, Tree * tree = nullptr) {
         std::vector<std::string> tmp(values);
         setValues(tmp, dims);
+        setTree(tree);
     }
 
     StringArray(StringArray&&) = default;
@@ -1387,8 +1427,8 @@ public:
 
     Record() = default;
 
-    inline Record(mdsdsc_xd_t && dsc)
-        : Data(std::move(dsc))
+    inline Record(mdsdsc_xd_t && dsc, Tree * tree = nullptr)
+        : Data(std::move(dsc), tree)
     { }
 
     Record(Record&&) = default;
@@ -1419,10 +1459,10 @@ public:
 
             mdsdsc_t * newDsc = xd.pointer;
             if (Class(newDsc->class_) == T::__class && DType(newDsc->dtype) == T::__dtype) {
-                return T(std::move(xd));
+                return T(std::move(xd), getTree());
             }
 
-            return Data(std::move(xd)).convert<T>();
+            return Data(std::move(xd), getTree()).convert<T>();
         }
 
         return T();
@@ -1464,8 +1504,8 @@ public:
 
     Param() = default;
 
-    inline Param(mdsdsc_xd_t && dsc)
-        : Record(std::move(dsc))
+    inline Param(mdsdsc_xd_t && dsc, Tree * tree = nullptr)
+        : Record(std::move(dsc), tree)
     { }
 
     template <typename _Value = Data, typename _Help = Data, typename _Validation = Data>
@@ -1510,8 +1550,8 @@ public:
 
     Signal() = default;
 
-    inline Signal(mdsdsc_xd_t && dsc)
-        : Record(std::move(dsc))
+    inline Signal(mdsdsc_xd_t && dsc, Tree * tree = nullptr)
+        : Record(std::move(dsc), tree)
     { }
 
     template <typename _Value = Data, typename _Raw = Data, typename _Dimension = Data>
@@ -1609,8 +1649,8 @@ public:
 
     Dimension() = default;
 
-    Dimension(mdsdsc_xd_t && dsc)
-        : Record(std::move(dsc))
+    Dimension(mdsdsc_xd_t && dsc, Tree * tree = nullptr)
+        : Record(std::move(dsc), tree)
     { }
 
     template <typename _Window, typename _Axis>
@@ -1657,8 +1697,8 @@ public:
 
     Window() = default;
 
-    Window(mdsdsc_xd_t && dsc)
-        : Record(std::move(dsc))
+    Window(mdsdsc_xd_t && dsc, Tree * tree = nullptr)
+        : Record(std::move(dsc), tree)
     { }
 
     template <typename _StartIndex, typename _EndIndex, typename _ValueAtIndex0>
@@ -1713,8 +1753,8 @@ public:
 
     Function() = default;
 
-    Function(mdsdsc_xd_t && dsc)
-        : Record(std::move(dsc))
+    Function(mdsdsc_xd_t && dsc, Tree * tree = nullptr)
+        : Record(std::move(dsc), tree)
     { }
 
     template <typename ..._Args>
@@ -1753,8 +1793,8 @@ public:
 
     Range() = default;
 
-    Range(mdsdsc_xd_t && dsc)
-        : Record(std::move(dsc))
+    Range(mdsdsc_xd_t && dsc, Tree * tree = nullptr)
+        : Record(std::move(dsc), tree)
     { }
 
     template <typename _Begin = Data, typename _Ending = Data, typename _Delta = Data>
@@ -1812,8 +1852,8 @@ public:
 
     WithUnits() = default;
 
-    inline WithUnits(mdsdsc_xd_t && dsc)
-        : Record(std::move(dsc))
+    inline WithUnits(mdsdsc_xd_t && dsc, Tree * tree = nullptr)
+        : Record(std::move(dsc), tree)
     { }
 
     template <typename _Value = Data, typename _Units = Data>
@@ -1856,8 +1896,8 @@ public:
 
     WithError() = default;
 
-    inline WithError(mdsdsc_xd_t && dsc)
-        : Record(std::move(dsc))
+    inline WithError(mdsdsc_xd_t && dsc, Tree * tree = nullptr)
+        : Record(std::move(dsc), tree)
     { }
 
     template <typename _Value = Data, typename _Error = Data>
@@ -2149,17 +2189,22 @@ T Data::convert()
     DType dscDType = DType(dsc->dtype);
 
     if constexpr (std::is_same_v<Data, T>) {
-        return T(release());
+        return T(release(), getTree());
     }
     else if constexpr (std::is_base_of_v<Data, T>) {
 
         if (dscClass == T::__class && dscDType == T::__dtype) {
-            return T(release());
+            return T(release(), getTree());
         }
 
         // TODO: Check edge cases for when we need to call DATA()
         if (dscClass == Class::R) {
-            status = TdiIntrinsic(OPC_DATA, 1, &dsc, &dscData);
+            if (hasTree()) {
+                status = _TdiIntrinsic(getTree()->getPDBID(), OPC_DATA, 1, &dsc, &dscData);
+            }
+            else {
+                status = TdiIntrinsic(OPC_DATA, 1, &dsc, &dscData);
+            }
             if (IS_NOT_OK(status)) {
                 throwException(status);
             }
@@ -2177,7 +2222,12 @@ T Data::convert()
         // TODO: Is there a better way to convert to a string?
         if constexpr (std::is_same_v<String, T>) {
             mdsdsc_xd_t decoXD = MDSDSC_XD_INITIALIZER;
-            status = TdiIntrinsic(OPC_DECOMPILE, 1, &dsc, &decoXD);
+            if (hasTree()) {
+                status = _TdiIntrinsic(getTree()->getPDBID(), OPC_DECOMPILE, 1, &dsc, &decoXD);
+            }
+            else {
+                status = TdiIntrinsic(OPC_DECOMPILE, 1, &dsc, &decoXD);
+            }
             if (IS_NOT_OK(status)) {
                 throwException(status);
             }
@@ -2201,7 +2251,7 @@ T Data::convert()
             }
     
             MdsFree1Dx(&dscData, nullptr);
-            return T(value);
+            return T(value, getTree());
         }
         else if constexpr (T::__class == Class::A && T::__dtype != DType::T) {
             array_coeff * dscArray;
@@ -2263,7 +2313,7 @@ T Data::convert()
             }
     
             MdsFree1Dx(&dscData, nullptr);
-            return T(values, dims);
+            return T(values, dims, getTree());
         }
     }
 
@@ -2283,7 +2333,12 @@ inline U Data::getUnits() const
 
     mdsdsc_xd_t out = MDSDSC_XD_INITIALIZER;
     mdsdsc_t * dsc = getDescriptor();
-    status = TdiIntrinsic(OPC_UNITS_OF, 1, &dsc, &out);
+    if (hasTree()) {
+        status = _TdiIntrinsic(getTree()->getPDBID(), OPC_UNITS_OF, 1, &dsc, &out);
+    }
+    else {
+        status = TdiIntrinsic(OPC_UNITS_OF, 1, &dsc, &out);
+    }
     if (IS_NOT_OK(status)) {
         throwException(status);
     }
@@ -2304,7 +2359,12 @@ inline T Data::getError() const
 
     mdsdsc_xd_t out = MDSDSC_XD_INITIALIZER;
     mdsdsc_t * dsc = getDescriptor();
-    status = TdiIntrinsic(OPC_ERROR_OF, 1, &dsc, &out);
+    if (hasTree()) {
+        status = _TdiIntrinsic(getTree()->getPDBID(), OPC_ERROR_OF, 1, &dsc, &out);
+    }
+    else {
+        status = TdiIntrinsic(OPC_ERROR_OF, 1, &dsc, &out);
+    }
     if (IS_NOT_OK(status)) {
         throwException(status);
     }
@@ -2319,7 +2379,12 @@ inline T Data::getHelp() const
 
     mdsdsc_xd_t out = MDSDSC_XD_INITIALIZER;
     mdsdsc_t * dsc = getDescriptor();
-    status = TdiIntrinsic(OPC_HELP_OF, 1, &dsc, &out);
+    if (hasTree()) {
+        status = _TdiIntrinsic(getTree()->getPDBID(), OPC_HELP_OF, 1, &dsc, &out);
+    }
+    else {
+        status = TdiIntrinsic(OPC_HELP_OF, 1, &dsc, &out);
+    }
     if (status == TdiINVDTYDSC) {
         // Unlike UNITS_OF and ERROR_OF, this throws an error when there is no value
         return T();
@@ -2338,7 +2403,12 @@ inline T Data::getValidation() const
 
     mdsdsc_xd_t out = MDSDSC_XD_INITIALIZER;
     mdsdsc_t * dsc = getDescriptor();
-    status = TdiIntrinsic(OPC_VALIDATION_OF, 1, &dsc, &out);
+    if (hasTree()) {
+        status = _TdiIntrinsic(getTree()->getPDBID(), OPC_VALIDATION_OF, 1, &dsc, &out);
+    }
+    else {
+        status = TdiIntrinsic(OPC_VALIDATION_OF, 1, &dsc, &out);
+    }
     if (status == TdiINVDTYDSC) {
         // Unlike UNITS_OF and ERROR_OF, this throws an error when there is no value
         return T();

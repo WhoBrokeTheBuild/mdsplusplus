@@ -98,7 +98,7 @@ Data TreeNode::getRecord() const
         throwException(status);
     }
 
-    return Data(std::move(xd));
+    return Data(std::move(xd), getTree());
 }
 
 void TreeNode::putRecord(const Data& data) const

@@ -1,3 +1,7 @@
 
 # CMake
 [Bb]uild/
+
+# vscode + clangd
+.vscode/
+.cache/

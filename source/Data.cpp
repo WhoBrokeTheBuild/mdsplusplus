@@ -8,7 +8,12 @@ std::string Data::decompile()
 
     mdsdsc_t * dsc = getDescriptor();
     mdsdsc_xd_t decoXD = MDSDSC_XD_INITIALIZER;
-    status = TdiIntrinsic(OPC_DECOMPILE, 1, &dsc, &decoXD);
+    if (hasTree()) {
+        status = _TdiIntrinsic(getTree()->getPDBID(), OPC_DECOMPILE, 1, &dsc, &decoXD);
+    }
+    else {
+        status = TdiIntrinsic(OPC_DECOMPILE, 1, &dsc, &decoXD);
+    }
     if (IS_NOT_OK(status)) {
         throwException(status);
     }
@@ -106,7 +111,12 @@ Data Function::call() const
     // TODO: Tree*
     opcode_t * opcode = (opcode_t *)dsc->pointer;
     mdsdsc_xd_t out = MDSDSC_XD_INITIALIZER;
-    status = TdiIntrinsic(*opcode, dsc->ndesc, dsc->arguments, &out);
+    if (hasTree()) {
+        status = _TdiIntrinsic(getTree()->getPDBID(), *opcode, dsc->ndesc, dsc->arguments, &out);
+    }
+    else {
+        status = TdiIntrinsic(*opcode, dsc->ndesc, dsc->arguments, &out);
+    }
     if (IS_NOT_OK(status)) {
         throwException(status);
     }
