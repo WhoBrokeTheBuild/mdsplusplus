@@ -2,14 +2,21 @@
 #define MDSPLUS_HPP
 
 #include <cstring>
-#include <map>
 #include <optional>
-#include <span>
 // #include <mdspan>
 #include <string>
 #include <vector>
 #include <cassert>
 #include <numeric>
+
+#if __has_include(<span>)
+#include <span>
+#else
+#include <gsl/span>
+namespace std {
+    using gsl::span;
+}
+#endif
 
 #include <MDSplusException.hpp>
 
@@ -24,6 +31,11 @@ extern "C" {
 extern int TdiConvert(mdsdsc_a_t * dsc, mdsdsc_a_t * convert);
 extern int TdiIntrinsic(opcode_t opcode, int narg, mdsdsc_t *list[], mdsdsc_xd_t *out_ptr);
 extern int _TdiIntrinsic(void **ctx, opcode_t opcode, int narg, mdsdsc_t *list[], mdsdsc_xd_t *out_ptr);
+extern int TdiCompile(mdsdsc_t * first, ...);
+extern int TdiExecute(mdsdsc_t * first, ...);
+
+int TdiCall(dtype_t rtype, int narg, mdsdsc_t *list[], mdsdsc_xd_t *out_ptr);
+
 // #include <tdishr.h>
 
 } // extern "C"
@@ -555,7 +567,7 @@ public:
     }
 
     [[nodiscard]]
-    inline void ** getPDBID() {
+    inline void ** getContext() {
         return &_dbid;
     }
 
@@ -611,11 +623,25 @@ public:
     static constexpr Class __class = Class::Missing;
     static constexpr DType __dtype = DType::Missing;
 
+    template <typename ...Args>
+    static Data Compile(std::string_view expression, Args... args);
+
+    template <typename ...Args>
+    static Data Execute(std::string_view expression, Args... args);
+
     template <typename T>
     static Data FromScalar(T value);
 
     template <typename T>
     static Data FromArray(const std::span<T> values, const std::vector<uint32_t>& dims = {});
+
+    template <typename T>
+    static Data FromArray(const std::vector<T>& values, const std::vector<uint32_t>& dims = {});
+
+    template <typename ...Args>
+    static inline Data FromExpression(std::string_view expression, Args... args) {
+        return Execute(expression, args...);
+    }
 
     inline Data() = default;
 
@@ -666,7 +692,7 @@ public:
 
         mdsdsc_t * args[] = { getDescriptor(), other.getDescriptor() };
         if (hasTree()) {
-            status = _TdiIntrinsic(getTree()->getPDBID(), OPC_EQ, 2, args, (mdsdsc_xd_t *)&out);
+            status = _TdiIntrinsic(getTree()->getContext(), OPC_EQ, 2, args, (mdsdsc_xd_t *)&out);
         }
         else {
             status = TdiIntrinsic(OPC_EQ, 2, args, (mdsdsc_xd_t *)&out);
@@ -758,7 +784,7 @@ public:
     template <typename T = Data>
     T getValidation() const;
 
-    std::string decompile();
+    std::string decompile() const;
 
     // UInt8Array serialize() const;
 
@@ -784,6 +810,121 @@ protected:
 }; // class Data
 
 static const Data EmptyData;
+
+std::string to_string(const Data * data);
+
+inline std::string to_string(const Data& data) {
+    return to_string(&data);
+}
+
+// TODO: Move
+template <typename T>
+struct is_std_vector : std::false_type { };
+
+template <typename T, typename A>
+struct is_std_vector<std::vector<T, A>> : std::true_type { };
+
+template <typename T>
+inline constexpr bool is_std_vector_v = is_std_vector<T>::value;
+
+// TODO: Rename
+template <typename T>
+inline mdsdsc_xd_t _getArgument(const T& value)
+{
+    if constexpr (std::is_base_of_v<Data, T>) {
+        return mdsdsc_xd_t{
+            .length = 0,
+            .dtype = DTYPE_DSC,
+            .class_ = CLASS_S,
+            .pointer = value.getDescriptor(),
+            .l_length = 0,
+        };
+    }
+    else if constexpr (is_std_vector_v<T>) {
+        return Data::FromArray(value).release();
+    }
+    else {
+        return Data::FromScalar(value).release();
+    }
+}
+
+// TODO: Rename
+inline void _freeArgument(mdsdsc_xd_t dsc) {
+    if (dsc.class_ == CLASS_XD) {
+        MdsFree1Dx(&dsc, nullptr);
+    }
+}
+
+// TODO: WTF?
+#define MdsEND_ARG ((void *)(intptr_t)1)
+#define MDS_END_ARG , MdsEND_ARG
+
+template <typename ...Args>
+Data Data::Compile(std::string_view expression, Args... args)
+{
+    int status;
+    mdsdsc_t dscExp = {
+        .length = length_t(expression.length()),
+        .dtype = DTYPE_T,
+        .class_ = CLASS_S,
+        .pointer = const_cast<char *>(expression.data()),
+    };
+
+    mdsdsc_xd_t out = MDSDSC_XD_INITIALIZER;
+
+    std::vector<mdsdsc_xd_t> xdArgs;
+    xdArgs.reserve(sizeof...(args));
+
+    auto handleArgument =
+        [&](mdsdsc_xd_t xd) -> mdsdsc_t * {
+            xdArgs.push_back(xd);
+            return xd.pointer;
+        };
+    
+    status = TdiCompile(&dscExp, handleArgument(_getArgument(args))..., &out MDS_END_ARG);
+    if (IS_NOT_OK(status)) {
+        throwException(status);
+    }
+
+    for (const auto& xd : xdArgs) {
+        _freeArgument(xd);
+    }
+
+    return Data(std::move(out));
+}
+
+template <typename ...Args>
+Data Data::Execute(std::string_view expression, Args... args)
+{
+    int status;
+    mdsdsc_t dscExp = {
+        .length = length_t(expression.length()),
+        .dtype = DTYPE_T,
+        .class_ = CLASS_S,
+        .pointer = const_cast<char *>(expression.data()),
+    };
+
+    std::vector<mdsdsc_xd_t> xdArgs;
+    xdArgs.reserve(sizeof...(args));
+
+    auto handleArgument =
+        [&](mdsdsc_xd_t xd) -> mdsdsc_t * {
+            xdArgs.push_back(xd);
+            return xd.pointer;
+        };
+    
+    mdsdsc_xd_t out = MDSDSC_XD_INITIALIZER;
+    status = TdiExecute(&dscExp, handleArgument(_getArgument(args))..., &out MDS_END_ARG);
+    if (IS_NOT_OK(status)) {
+        throwException(status);
+    }
+
+    for (const auto& xd : xdArgs) {
+        _freeArgument(xd);
+    }
+
+    return Data(std::move(out));
+}
 
 template <>
 inline Data Data::FromScalar(Data value) {
@@ -1154,52 +1295,102 @@ public:
 };
 
 template <>
-inline Data Data::FromArray(std::span<const Int8Array::__ctype> values, const std::vector<uint32_t>& dims /*= {}*/) {
+inline Data Data::FromArray(std::span<Int8Array::__ctype> values, const std::vector<uint32_t>& dims /*= {}*/) {
     return Int8Array(values, dims);
 }
 
 template <>
-inline Data Data::FromArray(std::span<const UInt8Array::__ctype> values, const std::vector<uint32_t>& dims /*= {}*/) {
+inline Data Data::FromArray(std::span<UInt8Array::__ctype> values, const std::vector<uint32_t>& dims /*= {}*/) {
     return UInt8Array(values, dims);
 }
 
 template <>
-inline Data Data::FromArray(std::span<const Int16Array::__ctype> values, const std::vector<uint32_t>& dims /*= {}*/) {
+inline Data Data::FromArray(std::span<Int16Array::__ctype> values, const std::vector<uint32_t>& dims /*= {}*/) {
     return Int16Array(values, dims);
 }
 
 template <>
-inline Data Data::FromArray(std::span<const UInt16Array::__ctype> values, const std::vector<uint32_t>& dims /*= {}*/) {
+inline Data Data::FromArray(std::span<UInt16Array::__ctype> values, const std::vector<uint32_t>& dims /*= {}*/) {
     return UInt16Array(values, dims);
 }
 
 template <>
-inline Data Data::FromArray(std::span<const Int32Array::__ctype> values, const std::vector<uint32_t>& dims /*= {}*/) {
+inline Data Data::FromArray(std::span<Int32Array::__ctype> values, const std::vector<uint32_t>& dims /*= {}*/) {
     return Int32Array(values, dims);
 }
 
 template <>
-inline Data Data::FromArray(std::span<const UInt32Array::__ctype> values, const std::vector<uint32_t>& dims /*= {}*/) {
+inline Data Data::FromArray(std::span<UInt32Array::__ctype> values, const std::vector<uint32_t>& dims /*= {}*/) {
     return UInt32Array(values, dims);
 }
 
 template <>
-inline Data Data::FromArray(std::span<const Int64Array::__ctype> values, const std::vector<uint32_t>& dims /*= {}*/) {
+inline Data Data::FromArray(std::span<Int64Array::__ctype> values, const std::vector<uint32_t>& dims /*= {}*/) {
     return Int64Array(values, dims);
 }
 
 template <>
-inline Data Data::FromArray(std::span<const UInt64Array::__ctype> values, const std::vector<uint32_t>& dims /*= {}*/) {
+inline Data Data::FromArray(std::span<UInt64Array::__ctype> values, const std::vector<uint32_t>& dims /*= {}*/) {
     return UInt64Array(values, dims);
 }
 
 template <>
-inline Data Data::FromArray(std::span<const Float32Array::__ctype> values, const std::vector<uint32_t>& dims /*= {}*/) {
+inline Data Data::FromArray(std::span<Float32Array::__ctype> values, const std::vector<uint32_t>& dims /*= {}*/) {
     return Float32Array(values, dims);
 }
 
 template <>
-inline Data Data::FromArray(std::span<const Float64Array::__ctype> values, const std::vector<uint32_t>& dims /*= {}*/) {
+inline Data Data::FromArray(std::span<Float64Array::__ctype> values, const std::vector<uint32_t>& dims /*= {}*/) {
+    return Float64Array(values, dims);
+}
+
+template <>
+inline Data Data::FromArray(const std::vector<Int8Array::__ctype>& values, const std::vector<uint32_t>& dims /*= {}*/) {
+    return Int8Array(values, dims);
+}
+
+template <>
+inline Data Data::FromArray(const std::vector<UInt8Array::__ctype>& values, const std::vector<uint32_t>& dims /*= {}*/) {
+    return UInt8Array(values, dims);
+}
+
+template <>
+inline Data Data::FromArray(const std::vector<Int16Array::__ctype>& values, const std::vector<uint32_t>& dims /*= {}*/) {
+    return Int16Array(values, dims);
+}
+
+template <>
+inline Data Data::FromArray(const std::vector<UInt16Array::__ctype>& values, const std::vector<uint32_t>& dims /*= {}*/) {
+    return UInt16Array(values, dims);
+}
+
+template <>
+inline Data Data::FromArray(const std::vector<Int32Array::__ctype>& values, const std::vector<uint32_t>& dims /*= {}*/) {
+    return Int32Array(values, dims);
+}
+
+template <>
+inline Data Data::FromArray(const std::vector<UInt32Array::__ctype>& values, const std::vector<uint32_t>& dims /*= {}*/) {
+    return UInt32Array(values, dims);
+}
+
+template <>
+inline Data Data::FromArray(const std::vector<Int64Array::__ctype>& values, const std::vector<uint32_t>& dims /*= {}*/) {
+    return Int64Array(values, dims);
+}
+
+template <>
+inline Data Data::FromArray(const std::vector<UInt64Array::__ctype>& values, const std::vector<uint32_t>& dims /*= {}*/) {
+    return UInt64Array(values, dims);
+}
+
+template <>
+inline Data Data::FromArray(const std::vector<Float32Array::__ctype>& values, const std::vector<uint32_t>& dims /*= {}*/) {
+    return Float32Array(values, dims);
+}
+
+template <>
+inline Data Data::FromArray(const std::vector<Float64Array::__ctype>& values, const std::vector<uint32_t>& dims /*= {}*/) {
     return Float64Array(values, dims);
 }
 
@@ -1407,16 +1598,6 @@ public:
 
 }; // class StringArray
 
-// TODO: Move
-template <typename T>
-struct is_std_vector : std::false_type { };
-
-template <typename T, typename A>
-struct is_std_vector<std::vector<T, A>> : std::true_type { };
-
-template <typename T>
-inline constexpr bool is_std_vector_v = is_std_vector<T>::value;
-
 template <DType DT>
 class Record : public Data
 {
@@ -1466,34 +1647,6 @@ public:
         }
 
         return T();
-    }
-
-protected:
-
-    template <typename T>
-    inline mdsdsc_xd_t _getArgument(const T& value)
-    {
-        if constexpr (std::is_base_of_v<Data, T>) {
-            return mdsdsc_xd_t{
-                .length = 0,
-                .dtype = DTYPE_DSC,
-                .class_ = CLASS_S,
-                .pointer = value.getDescriptor(),
-                .l_length = 0,
-            };
-        }
-        else if constexpr (is_std_vector_v<T>) {
-            return Data::FromArray(value).release();
-        }
-        else {
-            return Data::FromScalar(value).release();
-        }
-    }
-
-    inline void _freeArgument(mdsdsc_xd_t dsc) {
-        if (dsc.class_ == CLASS_XD) {
-            MdsFree1Dx(&dsc, nullptr);
-        }
     }
 
 }; // class Record<>
@@ -1976,26 +2129,6 @@ public:
 
 private:
 
-    template <typename T>
-    inline mdsdsc_xd_t _getArgument(const T& value) const
-    {
-        if constexpr (std::is_base_of_v<Data, T>) {
-            return mdsdsc_xd_t{
-                .length = 0,
-                .dtype = DTYPE_DSC,
-                .class_ = CLASS_S,
-                .pointer = value.getDescriptor(),
-                .l_length = 0,
-            };
-        }
-        else if constexpr (is_std_vector_v<T>) {
-            return Data::FromArray(value).release();
-        }
-        else {
-            return Data::FromScalar(value).release();
-        }
-    }
-
     Data _get(const std::string& expression, std::vector<mdsdsc_xd_t>&& xdArgs) const;
 
     int _id = InvalidConnectionID;
@@ -2200,7 +2333,7 @@ T Data::convert()
         // TODO: Check edge cases for when we need to call DATA()
         if (dscClass == Class::R) {
             if (hasTree()) {
-                status = _TdiIntrinsic(getTree()->getPDBID(), OPC_DATA, 1, &dsc, &dscData);
+                status = _TdiIntrinsic(getTree()->getContext(), OPC_DATA, 1, &dsc, &dscData);
             }
             else {
                 status = TdiIntrinsic(OPC_DATA, 1, &dsc, &dscData);
@@ -2223,7 +2356,7 @@ T Data::convert()
         if constexpr (std::is_same_v<String, T>) {
             mdsdsc_xd_t decoXD = MDSDSC_XD_INITIALIZER;
             if (hasTree()) {
-                status = _TdiIntrinsic(getTree()->getPDBID(), OPC_DECOMPILE, 1, &dsc, &decoXD);
+                status = _TdiIntrinsic(getTree()->getContext(), OPC_DECOMPILE, 1, &dsc, &decoXD);
             }
             else {
                 status = TdiIntrinsic(OPC_DECOMPILE, 1, &dsc, &decoXD);
@@ -2334,7 +2467,7 @@ inline U Data::getUnits() const
     mdsdsc_xd_t out = MDSDSC_XD_INITIALIZER;
     mdsdsc_t * dsc = getDescriptor();
     if (hasTree()) {
-        status = _TdiIntrinsic(getTree()->getPDBID(), OPC_UNITS_OF, 1, &dsc, &out);
+        status = _TdiIntrinsic(getTree()->getContext(), OPC_UNITS_OF, 1, &dsc, &out);
     }
     else {
         status = TdiIntrinsic(OPC_UNITS_OF, 1, &dsc, &out);
@@ -2360,7 +2493,7 @@ inline T Data::getError() const
     mdsdsc_xd_t out = MDSDSC_XD_INITIALIZER;
     mdsdsc_t * dsc = getDescriptor();
     if (hasTree()) {
-        status = _TdiIntrinsic(getTree()->getPDBID(), OPC_ERROR_OF, 1, &dsc, &out);
+        status = _TdiIntrinsic(getTree()->getContext(), OPC_ERROR_OF, 1, &dsc, &out);
     }
     else {
         status = TdiIntrinsic(OPC_ERROR_OF, 1, &dsc, &out);
@@ -2380,7 +2513,7 @@ inline T Data::getHelp() const
     mdsdsc_xd_t out = MDSDSC_XD_INITIALIZER;
     mdsdsc_t * dsc = getDescriptor();
     if (hasTree()) {
-        status = _TdiIntrinsic(getTree()->getPDBID(), OPC_HELP_OF, 1, &dsc, &out);
+        status = _TdiIntrinsic(getTree()->getContext(), OPC_HELP_OF, 1, &dsc, &out);
     }
     else {
         status = TdiIntrinsic(OPC_HELP_OF, 1, &dsc, &out);
@@ -2404,7 +2537,7 @@ inline T Data::getValidation() const
     mdsdsc_xd_t out = MDSDSC_XD_INITIALIZER;
     mdsdsc_t * dsc = getDescriptor();
     if (hasTree()) {
-        status = _TdiIntrinsic(getTree()->getPDBID(), OPC_VALIDATION_OF, 1, &dsc, &out);
+        status = _TdiIntrinsic(getTree()->getContext(), OPC_VALIDATION_OF, 1, &dsc, &out);
     }
     else {
         status = TdiIntrinsic(OPC_VALIDATION_OF, 1, &dsc, &out);

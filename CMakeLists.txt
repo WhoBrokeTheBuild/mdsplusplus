@@ -5,6 +5,15 @@ list(PREPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 project(mdsplusplus)
 
 include(CTest)
+include(FetchContent)
+
+FetchContent_Declare(GSL
+    GIT_REPOSITORY  "https://github.com/microsoft/GSL"
+    GIT_TAG         "v4.2.0"
+    GIT_SHALLOW     ON
+)
+
+FetchContent_MakeAvailable(GSL)
 
 if(BUILD_TESTING)
     find_package(GTest REQUIRED)
@@ -32,6 +41,7 @@ target_link_libraries(
         MDSplus::TdiShr
         MDSplus::TreeShr
         MDSplus::MdsIpShr
+        Microsoft.GSL::GSL
 )
 
 target_include_directories(

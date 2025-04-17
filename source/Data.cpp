@@ -2,14 +2,14 @@
 
 namespace mdsplus {
 
-std::string Data::decompile()
+std::string Data::decompile() const
 {
     int status;
 
     mdsdsc_t * dsc = getDescriptor();
     mdsdsc_xd_t decoXD = MDSDSC_XD_INITIALIZER;
     if (hasTree()) {
-        status = _TdiIntrinsic(getTree()->getPDBID(), OPC_DECOMPILE, 1, &dsc, &decoXD);
+        status = _TdiIntrinsic(getTree()->getContext(), OPC_DECOMPILE, 1, &dsc, &decoXD);
     }
     else {
         status = TdiIntrinsic(OPC_DECOMPILE, 1, &dsc, &decoXD);
@@ -112,7 +112,7 @@ Data Function::call() const
     opcode_t * opcode = (opcode_t *)dsc->pointer;
     mdsdsc_xd_t out = MDSDSC_XD_INITIALIZER;
     if (hasTree()) {
-        status = _TdiIntrinsic(getTree()->getPDBID(), *opcode, dsc->ndesc, dsc->arguments, &out);
+        status = _TdiIntrinsic(getTree()->getContext(), *opcode, dsc->ndesc, dsc->arguments, &out);
     }
     else {
         status = TdiIntrinsic(*opcode, dsc->ndesc, dsc->arguments, &out);

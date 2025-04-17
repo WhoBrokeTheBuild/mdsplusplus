@@ -238,4 +238,19 @@ std::string to_string(const Tree * tree)
     // );
 }
 
+std::string to_string(const Data * data)
+{
+    assert(data);
+
+    std::string str = "Data("; // TODO: Replace with class name?
+    str += to_string(data->getClass());
+    str += ", ";
+    str += to_string(data->getDType());
+    str += ", `";
+    str += data->decompile();
+    str += "`)";
+
+    return str;
+}
+
 } // namespace mdsplus

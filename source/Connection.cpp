@@ -141,6 +141,8 @@ Data Connection::_get(const std::string& expression, std::vector<mdsdsc_xd_t>&& 
         }
 
         ++argIndex;
+
+        _freeArgument(xdArg);
     }
 
     // Switch to temporary variables and building a descriptor :(
