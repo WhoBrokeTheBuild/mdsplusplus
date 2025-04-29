@@ -30,23 +30,23 @@ TreeNode TreeNode::getNode(std::string_view path) const
     return TreeNode(_tree, nid);
 }
 
-#ifdef __cpp_lib_optional
-std::optional<TreeNode> TreeNode::tryGetNode(std::string_view path) const
-{
-    int status;
-    int nid = 0;
+// #ifdef __cpp_lib_optional
+// std::optional<TreeNode> TreeNode::tryGetNode(std::string_view path) const
+// {
+//     int status;
+//     int nid = 0;
 
-    status = _TreeFindNodeRelative(getTree()->getDBID(), path.data(), _nid, &nid);
-    if (status == TreeNNF) {
-        return std::nullopt;
-    }
-    else if (IS_NOT_OK(status)) {
-        throwException(status);
-    }
+//     status = _TreeFindNodeRelative(getTree()->getDBID(), path.data(), _nid, &nid);
+//     if (status == TreeNNF) {
+//         return std::nullopt;
+//     }
+//     else if (IS_NOT_OK(status)) {
+//         throwException(status);
+//     }
 
-    return TreeNode(_tree, nid);
-}
-#endif
+//     return TreeNode(_tree, nid);
+// }
+// #endif
 
 TreeNode TreeNode::addNode(std::string_view path, Usage usage) const
 {

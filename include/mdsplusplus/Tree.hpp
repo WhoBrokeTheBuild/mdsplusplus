@@ -95,9 +95,9 @@ public:
 
     TreeNode getNode(std::string_view path) const;
 
-#ifdef __cpp_lib_optional
-    std::optional<TreeNode> tryGetNode(std::string_view path) const; // noexcept
-#endif
+// #ifdef __cpp_lib_optional
+//     std::optional<TreeNode> tryGetNode(std::string_view path) const; // noexcept
+// #endif
 
     TreeNode addNode(std::string_view path, Usage usage) const;
 
@@ -697,10 +697,10 @@ public:
 
     TreeNode getDefaultNode() const;
 
-    template <typename T, typename ...Args>
+    template <typename T = Data, typename ...Args>
     T compileData(std::string_view expression, Args... args) const;
 
-    template <typename T, typename ...Args>
+    template <typename T = Data, typename ...Args>
     T executeData(std::string_view expression, Args... args) const;
 
 private:
@@ -723,7 +723,7 @@ inline std::string to_string(const Tree& tree) {
     return to_string(&tree);
 }
 
-template <typename T = Data, typename ...Args>
+template <typename T /*= Data*/, typename ...Args>
 T Tree::compileData(std::string_view expression, Args... args) const
 {
     int status;
@@ -748,7 +748,7 @@ T Tree::compileData(std::string_view expression, Args... args) const
     return Data(std::move(out), getTree()).releaseAndConvert<T>();
 }
 
-template <typename T = Data, typename ...Args>
+template <typename T /*= Data*/, typename ...Args>
 T Tree::executeData(std::string_view expression, Args... args) const
 {
     int status;
