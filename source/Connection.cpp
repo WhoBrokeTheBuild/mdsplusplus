@@ -33,58 +33,38 @@ extern "C" {
 
 namespace mdsplus {
 
-void Connection::open(const std::string& hostspec)
+void Connection::connect(const std::string& hostspec)
 {
-    // TODO: SetCompressionLevel
-    _id = ConnectToMds(const_cast<char *>(hostspec.c_str()));
-    if (_id == InvalidConnectionID) {
-        // TODO:
-        throw MDSplusException();
+    if (hostspec == "local") {
+        _local = true;
+    }
+    else {
+        // TODO: SetCompressionLevel
+        _id = ConnectToMds(const_cast<char *>(hostspec.c_str()));
+        if (_id == InvalidConnectionID) {
+            // TODO:
+            throw MDSplusException();
+        }
     }
 
     _hostspec = hostspec;
 }
 
-void Connection::close()
+void Connection::disconnect()
 {
+    _local = false;
+    
     if (_id != InvalidConnectionID) {
         DisconnectFromMds(_id);
         _id = InvalidConnectionID;
     }
 }
 
-void Connection::reconnect()
-{
-    close();
-    open(_hostspec);
-}
-
-void Connection::openTree(const std::string& tree, int shot) const
-{
-    int status = get<Int32>("TreeOpen($,$)", tree, shot).getValue();
-    if (IS_NOT_OK(status)) {
-        throwException(status);
-    }
-}
-
-void Connection::closeTree(const std::string& tree, int shot) const
-{
-    int status = get<Int32>("TreeClose($,$)", tree, shot).getValue();
-    if (IS_NOT_OK(status)) {
-        throwException(status);
-    }
-}
-
-int Connection::closeAllTrees() const
-{
-    return get<Int32>("_i=0;WHILE(IAND(TreeClose(),1)) _i++;_i").getValue();
-}
-
-Data Connection::_get(const std::string& expression, std::vector<mdsdsc_xd_t>&& xdArgs) const
+Data Connection::_get(const std::string& expression, std::vector<Argument>&& argList) const
 {
     int status;
     int argIndex = 0;
-    uint8_t numberOfArgs = xdArgs.size() + 1;
+    uint8_t numberOfArgs = argList.size() + 1;
 
     status = SendArg(
         _id,
@@ -102,10 +82,10 @@ Data Connection::_get(const std::string& expression, std::vector<mdsdsc_xd_t>&& 
     
     ++argIndex;
 
-    for (const auto& xdArg : xdArgs) {
+    for (auto& arg : argList) {
         status = MDSplusERROR;
 
-        mdsdsc_t * dscArg = xdArg.pointer;
+        mdsdsc_t * dscArg = arg.getDescriptor();
 
         if (dscArg->class_ == CLASS_S) {
             mdsdsc_s_t * scalar = reinterpret_cast<mdsdsc_s_t *>(dscArg);
@@ -142,7 +122,7 @@ Data Connection::_get(const std::string& expression, std::vector<mdsdsc_xd_t>&& 
 
         ++argIndex;
 
-        _freeArgument(xdArg);
+        arg.free();
     }
 
     // Switch to temporary variables and building a descriptor :(
@@ -194,12 +174,16 @@ Data Connection::_get(const std::string& expression, std::vector<mdsdsc_xd_t>&& 
     switch (response->dtype) {
     case DTYPE_F:
         response->dtype = DTYPE_FLOAT;
+        break;
     case DTYPE_D:
         response->dtype = DTYPE_DOUBLE;
+        break;
     case DTYPE_FC:
         response->dtype = DTYPE_FLOAT_COMPLEX;
+        break;
     case DTYPE_DC:
         response->dtype = DTYPE_DOUBLE_COMPLEX;
+        break;
     default: ;
     }
 

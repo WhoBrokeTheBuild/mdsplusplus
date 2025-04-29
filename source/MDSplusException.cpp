@@ -1,4 +1,4 @@
-#include <MDSplusException.hpp>
+#include <mdsplusplus/MDSplusException.hpp>
 
 #include <mdsshr.h>
 

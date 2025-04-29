@@ -2,27 +2,37 @@
 
 namespace mdsplus {
 
+int Data::_intrinsic(opcode_t opcode, int narg, mdsdsc_t *list[], mdsdsc_xd_t * out) const
+{
+    int status;
+
+    if (hasTree()) {
+        status = _TdiIntrinsic(getTree()->getContext(), opcode, narg, list, out);
+    }
+    else {
+        status = TdiIntrinsic(opcode, narg, list, out);
+    }
+
+    return status;
+}
+
 std::string Data::decompile() const
 {
     int status;
 
     mdsdsc_t * dsc = getDescriptor();
-    mdsdsc_xd_t decoXD = MDSDSC_XD_INITIALIZER;
-    if (hasTree()) {
-        status = _TdiIntrinsic(getTree()->getContext(), OPC_DECOMPILE, 1, &dsc, &decoXD);
-    }
-    else {
-        status = TdiIntrinsic(OPC_DECOMPILE, 1, &dsc, &decoXD);
-    }
+    mdsdsc_xd_t out = MDSDSC_XD_INITIALIZER;
+    status = _intrinsic(OPC_DECOMPILE, 1, &dsc, &out);
     if (IS_NOT_OK(status)) {
         throwException(status);
     }
 
-    mdsdsc_t * decoDsc = decoXD.pointer;
-    assert(decoDsc->dtype == DTYPE_T);
+    mdsdsc_t * deco = out.pointer;
+    assert(deco->dtype == DTYPE_T);
 
-    std::string decompile(decoDsc->pointer, decoDsc->length);
-    status = MdsFree1Dx(&decoXD, nullptr);
+    std::string decompile(deco->pointer, deco->length);
+
+    status = MdsFree1Dx(&out, nullptr);
     if (IS_NOT_OK(status)) {
         throwException(status);
     }
@@ -47,7 +57,7 @@ void String::setValue(std::string_view value)
     }
 }
 
-void StringArray::setValues(std::span<std::string> values, const std::vector<uint32_t>& dims /*= {}*/)
+void StringArray::setValues(const std::vector<std::string>& values, const std::vector<uint32_t>& dims /*= {}*/)
 {
     int status;
 
@@ -70,7 +80,7 @@ void StringArray::setValues(std::span<std::string> values, const std::vector<uin
         .length = maxSize,
         .dtype = DTYPE_T,
         .class_ = CLASS_A,
-        .pointer = buffer.data(),
+        .pointer = const_cast<char *>(buffer.data()),
         .scale = 0,
         .digits = 0,
         .aflags = aflags_t{
@@ -82,7 +92,7 @@ void StringArray::setValues(std::span<std::string> values, const std::vector<uin
         },
         .dimct = dimct_t(dims.size()),
         .arsize = arsize_t(buffer.size()),
-        .a0 = buffer.data(),
+        .a0 = const_cast<char *>(buffer.data()),
         .m = { 0 },
     };
 
