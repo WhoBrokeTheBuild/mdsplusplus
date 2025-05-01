@@ -211,6 +211,8 @@ std::string to_string(const Mode& mode)
     case Mode::ReadOnly: return "Mode::ReadOnly";
     case Mode::Edit: return "Mode::Edit";
     case Mode::New: return "Mode::New";
+
+    case Mode::View: return "Mode::View";
     }
 
     return "?";
@@ -242,7 +244,8 @@ std::string to_string(const Data * data)
 {
     assert(data);
 
-    std::string str = "Data("; // TODO: Replace with class name?
+    std::string str(data->getClassName());
+    str += "(";
     str += to_string(data->getClass());
     str += ", ";
     str += to_string(data->getDType());

@@ -134,15 +134,4 @@ Data Function::call() const
     return Data(std::move(out));
 }
 
-// UInt8Array Data::serialize() const
-// {
-//     mdsdsc_xd_t out = MDSDSC_XD_INITIALIZER;
-//     int status = MdsSerializeDscOut(getDescriptor(), &out);
-//     if (IS_NOT_OK(status)) {
-//         throwException(status);
-//     }
-
-//     return UInt8Array(std::move(out));
-// }
-
 } // namespace mdsplus

@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "Data.hpp"
+#include "Scalar.hpp"
 #include "Array.hpp"
 
 namespace mdsplus {
@@ -32,23 +33,23 @@ public:
         connect(_hostspec);
     }
 
-    template <typename T = Data, typename ...Args>
-    T get(const std::string& expression, Args ...args) const
+    template <typename ResultType = Data, typename ...ArgTypes>
+    ResultType get(const std::string& expression, ArgTypes ...args) const
     {
         if (_local) {
-            return Data::Execute<T>(expression, args...);
+            return Data::Execute<ResultType>(expression, args...);
         }
         else {
             std::vector<Argument> argList({ Argument(args)... });
-            return _get(expression, std::move(argList)).releaseAndConvert<T>();
+            return _get(expression, std::move(argList)).releaseAndConvert<ResultType>();
         }
     }
 
-    template <typename T = Data, typename ...Args>
-    T getObject(const std::string& expression, Args ...args) const
+    template <typename ResultType = Data, typename ...ArgTypes>
+    ResultType getObject(const std::string& expression, ArgTypes ...args) const
     {
         UInt8Array serializedData = get<UInt8Array>("serializeout(`(" + expression + ";))", args...);
-        return serializedData.deserialize<T>();
+        return serializedData.deserialize<ResultType>();
     }
 
     inline void openTree(const std::string& tree, int shot) const {

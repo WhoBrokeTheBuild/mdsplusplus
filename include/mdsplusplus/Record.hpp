@@ -5,13 +5,11 @@
 
 namespace mdsplus {
 
-template <DType DT>
 class Record : public Data
 {
 public:
 
-    static constexpr Class class_ = Class::R;
-    static constexpr DType dtype = DT;
+    static constexpr Class __class = Class::R;
 
     Record() = default;
 
@@ -39,8 +37,8 @@ public:
         return (dsc && index < dsc->ndesc && dsc->dscptrs[index] != nullptr);
     }
 
-    template <typename T = Data>
-    inline T getDescriptorAt(size_t index) const {
+    template <typename ResultType = Data>
+    inline ResultType getDescriptorAt(size_t index) const {
         mdsdsc_r_t * dsc = getRecordDescriptor();
 
         if (dsc && index < dsc->ndesc) {
@@ -51,40 +49,65 @@ public:
             }
 
             mdsdsc_t * newDsc = xd.pointer;
-            if (Class(newDsc->class_) == T::class_ && DType(newDsc->dtype) == T::dtype) {
-                return T(std::move(xd), getTree());
+            if (Class(newDsc->class_) == ResultType::__class && DType(newDsc->dtype) == ResultType::__dtype) {
+                return ResultType(std::move(xd), getTree());
             }
 
-            return Data(std::move(xd), getTree()).releaseAndConvert<T>();
+            return Data(std::move(xd), getTree()).releaseAndConvert<ResultType>();
         }
 
-        return T();
+        return ResultType();
     }
 
 }; // class Record<>
 
-class Param : public Record<DType::Param>
+#define MDSPLUS_RECORD_BOOTSTRAP(RecordType, DataType)           \
+                                                                 \
+    static constexpr DType __dtype = DataType;                   \
+                                                                 \
+    RecordType() = default;                                      \
+                                                                 \
+    inline RecordType(mdsdsc_xd_t && dsc, Tree * tree = nullptr) \
+        : Record(std::move(dsc), tree)                           \
+    { }                                                          \
+                                                                 \
+    RecordType(RecordType &&) = default;                         \
+    RecordType &operator=(RecordType &&) = default;              \
+                                                                 \
+    inline std::string_view getClassName() const override {      \
+        return #RecordType;                                      \
+    }                                                            \
+                                                                 \
+    [[nodiscard]]                                                \
+    inline RecordType clone() const {                            \
+        return _clone<RecordType>();                             \
+    }
+
+class Param : public Record
 {
 public:
 
-    Param() = default;
+    MDSPLUS_RECORD_BOOTSTRAP(Param, DType::Param)
 
-    inline Param(mdsdsc_xd_t && dsc, Tree * tree = nullptr)
-        : Record(std::move(dsc), tree)
-    { }
-
-    template <typename _Value = Data, typename _Help = Data, typename _Validation = Data>
-    Param(const _Value& value, const _Help& help, const _Validation& validation)
-    {
+    template <
+        typename ValueType, 
+        typename HelpType, 
+        typename ValidationType
+    >
+    Param(
+        const ValueType& value,
+        const HelpType& help,
+        const ValidationType& validation
+    ) {
         int status;
 
         Argument argValue(value);
-        Argument argUnits(help);
+        Argument argHelp(help);
         Argument argValidation(validation);
 
         DESCRIPTOR_PARAM(dsc,
             argValue.getDescriptor(),
-            argUnits.getDescriptor(),
+            argHelp.getDescriptor(),
             argValidation.getDescriptor()
         );
 
@@ -94,38 +117,47 @@ public:
         }
 
         argValue.free();
-        argUnits.free();
+        argHelp.free();
         argValidation.free();
     }
 
+    template <typename ValueType = Data>
     [[nodiscard]]
-    inline Param clone() const {
-        return _clone<Param>();
+    inline ValueType getValue() const {
+        return getDescriptorAt<ValueType>(0);
     }
 
-    template <typename T = Data>
+    template <typename HelpType = Data>
     [[nodiscard]]
-    inline T getValue() const {
-        return getDescriptorAt<T>(0);
+    inline HelpType getHelp() const {
+        return getDescriptorAt<HelpType>(1);
     }
 
-    // getHelp and getValidation are defined in Data
+    template <typename ValidationType = Data>
+    [[nodiscard]]
+    inline ValidationType getValidation() const {
+        return getDescriptorAt<ValidationType>(2);
+    }
+
 
 }; // class Param
 
-class Signal : public Record<DType::Signal>
+class Signal : public Record
 {
 public:
 
-    Signal() = default;
+    MDSPLUS_RECORD_BOOTSTRAP(Signal, DType::Signal)
 
-    inline Signal(mdsdsc_xd_t && dsc, Tree * tree = nullptr)
-        : Record(std::move(dsc), tree)
-    { }
-
-    template <typename _Value = Data, typename _Raw = Data, typename _Dimension = Data>
-    Signal(const _Value& value, const _Raw& raw, const _Dimension& dimension = {})
-    {
+    template <
+        typename ValueType, 
+        typename RawType, 
+        typename DimensionType
+    >
+    Signal(
+        const ValueType& value,
+        const RawType& raw,
+        const DimensionType& dimension = {}
+    ) {
         int status;
 
         Argument argValue(value);
@@ -148,9 +180,16 @@ public:
         argDimension.free();
     }
 
-    template <typename _Value = Data, typename _Raw = Data, typename ..._Dimensions>
-    Signal(const _Value& value, const _Raw& raw, const _Dimensions& ...dimensions)
-    {
+    template <
+        typename ValueType,
+        typename RawType,
+        typename ...DimensionTypes
+    >
+    Signal(
+        const ValueType& value,
+        const RawType& raw,
+        const DimensionTypes& ...dimensions
+    ) {
         int status;
 
         Argument argValue(value);
@@ -180,33 +219,28 @@ public:
         }
     }
 
+    template <typename ValueType = Data>
     [[nodiscard]]
-    inline Signal clone() const {
-        return _clone<Signal>();
+    inline ValueType getValue() const {
+        return getDescriptorAt<ValueType>(0);
     }
 
-    template <typename T = Data>
+    template <typename RawType = Data>
     [[nodiscard]]
-    inline T getValue() const {
-        return getDescriptorAt<T>(0);
+    inline RawType getRaw() const {
+        return getDescriptorAt<RawType>(1);
     }
 
-    template <typename T = Data>
+    template <typename DimensionType = Data>
     [[nodiscard]]
-    inline T getRaw() const {
-        return getDescriptorAt<T>(1);
+    inline DimensionType getDimensionAt(size_t index = 0) const {
+        return getDescriptorAt<DimensionType>(2 + index);
     }
 
-    template <typename T = Data>
+    template <typename DimensionType = Data>
     [[nodiscard]]
-    inline T getDimensionAt(size_t index = 0) const {
-        return getDescriptorAt<T>(2 + index);
-    }
-
-    template <typename T = Data>
-    [[nodiscard]]
-    inline T getDimensions() const {
-        std::vector<T> dims;
+    inline DimensionType getDimensions() const {
+        std::vector<DimensionType> dims;
         size_t count = getNumDescriptors() - 2;
         for (size_t i = 0; i < count; ++i) {
             dims.push_back(getDimensionAt(i));
@@ -216,18 +250,14 @@ public:
 
 }; // class Signal
 
-class Dimension : public Record<DType::Dimension>
+class Dimension : public Record
 {
 public:
 
-    Dimension() = default;
+    MDSPLUS_RECORD_BOOTSTRAP(Dimension, DType::Dimension)
 
-    Dimension(mdsdsc_xd_t && dsc, Tree * tree = nullptr)
-        : Record(std::move(dsc), tree)
-    { }
-
-    template <typename _Window, typename _Axis>
-    Dimension(const _Window& window, const _Axis& axis)
+    template <typename WindowType, typename AxisType>
+    Dimension(const WindowType& window, const AxisType& axis)
     {
         int status;
 
@@ -248,38 +278,36 @@ public:
         tmpAxis.free();
     }
 
+    template <typename WindowType = Data>
     [[nodiscard]]
-    inline Dimension clone() const {
-        return _clone<Dimension>();
+    inline WindowType getWindow() const {
+        return getDescriptorAt<WindowType>(0);
     }
 
-    template <typename T = Data>
+    template <typename AxisType = Data>
     [[nodiscard]]
-    inline T getWindow() const {
-        return getDescriptorAt<T>(0);
-    }
-
-    template <typename T = Data>
-    [[nodiscard]]
-    inline T getAxis() const {
-        return getDescriptorAt<T>(1);
+    inline AxisType getAxis() const {
+        return getDescriptorAt<AxisType>(1);
     }
 
 }; // class Dimension
 
-class Window : public Record<DType::Window>
+class Window : public Record
 {
 public:
 
-    Window() = default;
-
-    Window(mdsdsc_xd_t && dsc, Tree * tree = nullptr)
-        : Record(std::move(dsc), tree)
-    { }
-
-    template <typename _StartIndex, typename _EndIndex, typename _ValueAtIndex0>
-    Window(const _StartIndex& startIndex, const _EndIndex& endIndex, const _ValueAtIndex0& valueAtIndex0)
-    {
+    MDSPLUS_RECORD_BOOTSTRAP(Window, DType::Window)
+    
+    template <
+        typename StartIndexType,
+        typename EndIndexType,
+        typename ValueType
+    >
+    Window(
+        const StartIndexType& startIndex,
+        const EndIndexType& endIndex,
+        const ValueType& valueAtIndex0
+    ) {
         int status;
 
         Argument argStartIndex(startIndex);
@@ -302,43 +330,34 @@ public:
         argValueAtIndex0.free();
     }
 
+    template <typename StartIndexType = Data>
     [[nodiscard]]
-    inline Window clone() const {
-        return _clone<Window>();
+    inline StartIndexType getStartIndex() const {
+        return getDescriptorAt<StartIndexType>(0);
     }
 
-    template <typename T = Data>
+    template <typename EndIndexType = Data>
     [[nodiscard]]
-    inline T getStartIndex() const {
-        return getDescriptorAt<T>(0);
+    inline EndIndexType getEndIndex() const {
+        return getDescriptorAt<EndIndexType>(1);
     }
 
-    template <typename T = Data>
+    template <typename ValueType = Data>
     [[nodiscard]]
-    inline T getEndIndex() const {
-        return getDescriptorAt<T>(1);
-    }
-
-    template <typename T = Data>
-    [[nodiscard]]
-    inline T getValueAtIndex0() const {
-        return getDescriptorAt<T>(2);
+    inline ValueType getValueAtIndex0() const {
+        return getDescriptorAt<ValueType>(2);
     }
 
 }; // class Window
 
-class Function : public Record<DType::Function>
+class Function : public Record
 {
 public:
 
-    Function() = default;
+    MDSPLUS_RECORD_BOOTSTRAP(Function, DType::Function)
 
-    Function(mdsdsc_xd_t && dsc, Tree * tree = nullptr)
-        : Record(std::move(dsc), tree)
-    { }
-
-    template <typename ..._Args>
-    Function(opcode_t opcode, const _Args& ...args)
+    template <typename ...ArgTypes>
+    Function(opcode_t opcode, const ArgTypes& ...args)
     {
         int status;
 
@@ -367,19 +386,24 @@ public:
 
 }; // class Function
 
-class Range : public Record<DType::Range>
+// TODO: Conglom?
+
+class Range : public Record
 {
 public:
 
-    Range() = default;
+    MDSPLUS_RECORD_BOOTSTRAP(Range, DType::Range)
 
-    Range(mdsdsc_xd_t && dsc, Tree * tree = nullptr)
-        : Record(std::move(dsc), tree)
-    { }
-
-    template <typename _Begin = Data, typename _Ending = Data, typename _Delta = Data>
-    Range(const _Begin& begin, const _Ending& ending, const _Delta& delta)
-    {
+    template <
+        typename BeginType = Data,
+        typename EndingType = Data,
+        typename DeltaType = Data
+    >
+    Range(
+        const BeginType& begin,
+        const EndingType& ending,
+        const DeltaType& delta
+    ) {
         int status;
 
         Argument argBegin(begin);
@@ -402,27 +426,22 @@ public:
         argDelta.free();
     }
 
+    template <typename BeginType = Data>
     [[nodiscard]]
-    inline Range clone() const {
-        return _clone<Range>();
+    inline BeginType getBegin() const {
+        return getDescriptorAt<BeginType>(0);
     }
 
-    template <typename T = Data>
+    template <typename EndingType = Data>
     [[nodiscard]]
-    inline T getBegin() const {
-        return getDescriptorAt<T>(0);
+    inline EndingType getEnding() const {
+        return getDescriptorAt<EndingType>(1);
     }
 
-    template <typename T = Data>
+    template <typename DeltaType = Data>
     [[nodiscard]]
-    inline T getEnding() const {
-        return getDescriptorAt<T>(1);
-    }
-
-    template <typename T = Data>
-    [[nodiscard]]
-    inline T getDelta() const {
-        return getDescriptorAt<T>(2);
+    inline DeltaType getDelta() const {
+        return getDescriptorAt<DeltaType>(2);
     }
 
     // TODO: isFinite() ?
@@ -430,18 +449,20 @@ public:
 
 }; // class Range
 
-class WithUnits : public Record<DType::WithUnits>
+// TODO: Action
+// TODO: Dispatch
+// TODO: Routine?
+// TODO: Method?
+// TODO: Event?
+
+class WithUnits : public Record
 {
 public:
 
-    WithUnits() = default;
+    MDSPLUS_RECORD_BOOTSTRAP(WithUnits, DType::WithUnits)
 
-    inline WithUnits(mdsdsc_xd_t && dsc, Tree * tree = nullptr)
-        : Record(std::move(dsc), tree)
-    { }
-
-    template <typename _Value = Data, typename _Units = Data>
-    WithUnits(const _Value& value, const _Units& units)
+    template <typename ValueType, typename UnitsType>
+    WithUnits(const ValueType& value, const UnitsType& units)
     {
         int status;
 
@@ -462,33 +483,30 @@ public:
         argUnits.free();
     }
 
+    template <typename ValueType = Data>
     [[nodiscard]]
-    inline WithUnits clone() const {
-        return _clone<WithUnits>();
+    inline ValueType getValue() const {
+        return getDescriptorAt<ValueType>(0);
     }
 
-    template <typename T = Data>
+    template <typename UnitsType = Data>
     [[nodiscard]]
-    inline T getValue() const {
-        return getDescriptorAt<T>(0);
+    inline UnitsType getUnits() const {
+        return getDescriptorAt<UnitsType>(1);
     }
-
-    // getUnits is defined in Data
 
 }; // class WithUnits
 
-class WithError : public Record<DType::WithError>
+// TODO: Call?
+
+class WithError : public Record
 {
 public:
 
-    WithError() = default;
+    MDSPLUS_RECORD_BOOTSTRAP(WithError, DType::WithError)
 
-    inline WithError(mdsdsc_xd_t && dsc, Tree * tree = nullptr)
-        : Record(std::move(dsc), tree)
-    { }
-
-    template <typename _Value = Data, typename _Error = Data>
-    WithError(const _Value& value, const _Error& error)
+    template <typename ValueType, typename ErrorType>
+    WithError(const ValueType& value, const ErrorType& error)
     {
         int status;
 
@@ -509,20 +527,24 @@ public:
         argError.free();
     }
 
+    template <typename ValueType = Data>
     [[nodiscard]]
-    inline WithError clone() const {
-        return _clone<WithError>();
+    inline ValueType getValue() const {
+        return getDescriptorAt<ValueType>(0);
     }
 
-    template <typename T = Data>
+    template <typename ErrorType = Data>
     [[nodiscard]]
-    inline T getValue() const {
-        return getDescriptorAt<T>(0);
+    inline ErrorType getError() const {
+        return getDescriptorAt<ErrorType>(1);
     }
-
-    // getError is defined in Data
 
 }; // class WithError
+
+// TODO: List
+// TODO: Tuple
+// TODO: Dictionary
+// TODO: Opaque?
 
 } // namespace mdsplus
 

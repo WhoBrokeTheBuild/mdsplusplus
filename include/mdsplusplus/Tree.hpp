@@ -103,9 +103,6 @@ public:
 
     TreeNode addDevice(std::string_view path, std::string_view model) const;
 
-    // SET_FLAGS
-    // CLEAR_FLAGS
-
     [[nodiscard]]
     inline uint64_t getTimeInserted() const {
         return _getNCI<uint64_t>(NciTIME_INSERTED);
@@ -146,16 +143,16 @@ public:
         return _getNCI<TreeNodeFlags>(NciGET_FLAGS);
     }
 
-    // setFlagsHigh
-    // setFlagsOn
-    inline void setTheseFlags(TreeNodeFlags flags) const {
+    inline void setFlagsOn(TreeNodeFlags flags) const {
         
     }
 
-    // setFlagsLow
-    // setFlagsOff
-    inline void clearTheseFlags(TreeNodeFlags flags) const {
+    inline void setFlagsOff(TreeNodeFlags flags) const {
         
+    }
+
+    inline void clearFlags(TreeNodeFlags flags) const {
+        setFlagsOff(flags);
     }
 
 
@@ -354,6 +351,8 @@ public:
     inline usage_t getUsage() const {
         return _getNCI<usage_t>(NciUSAGE);
     }
+
+    // setUsage
     
     [[nodiscard]]
     inline std::string getParentTreeName() const {
@@ -420,10 +419,14 @@ public:
         return _getNCI<uint8_t>(NciCOMPRESSION_METHOD);
     }
 
+    // setCompressionMethod?
+
     [[nodiscard]]
     inline std::string getCompressionMethodString() const {
         return _getStringNCI(NciCOMPRESSION_METHOD_STR, 64);
     }
+
+    // setCompressionMethodString?
 
     // template <typename T = Data>
     // [[nodiscard]]
@@ -438,35 +441,35 @@ public:
 
     void putRecord(const Data& data) const;
 
-    template <typename T = Data>
+    template <typename DataType = Data>
     [[nodiscard]]
-    T getData() const;
+    DataType getData() const;
 
-    template <typename T = Data, typename U = Data>
+    template <typename DataType = Data, typename UnitsType = Data>
     [[nodiscard]]
-    std::tuple<T, U> getDataWithUnits() const;
+    std::tuple<DataType, UnitsType> getDataWithUnits() const;
 
-    template <typename T>
-    inline void setData(T value) const {
+    template <typename DataType>
+    inline void setData(DataType value) const {
         putRecord(Data::FromScalar(value));
     }
 
-    template <typename T, typename U>
-    inline void setDataWithUnits(T value, U units) const {
+    template <typename DataType, typename UnitsType>
+    inline void setDataWithUnits(DataType value, UnitsType units) const {
         putRecord(WithUnits(Data::FromScalar(value), Data::FromScalar(units)));
     }
 
 #ifdef __cpp_lib_span
-    template <typename T>
-    void setArrayData(const std::span<const T> values, const std::vector<uint32_t>& dims = {}) const {
+    template <typename DataType>
+    void setArrayData(const std::span<const DataType> values, const std::vector<uint32_t>& dims = {}) const {
         if (dims.empty()) {
             return setArrayData(values.data(), { values.size() });
         }
         return setArrayData(values.data(), dims);
     }
 
-    template <typename T, typename U>
-    void setArrayDataWithUnits(const std::span<const T> values, U units, const std::vector<uint32_t>& dims = {}) const {
+    template <typename DataType, typename UnitsType>
+    void setArrayDataWithUnits(const std::span<const DataType> values, UnitsType units, const std::vector<uint32_t>& dims = {}) const {
         if (dims.empty()) {
             return setArrayDataWithUnits(values.data(), units, { values.size() });
         }
@@ -474,100 +477,110 @@ public:
     }
 #endif
 
-    template <typename T>
-    inline void setArrayData(std::vector<T>& values, const std::vector<uint32_t>& dims = {}) const {
+    template <typename DataType>
+    inline void setArrayData(std::vector<DataType>& values, const std::vector<uint32_t>& dims = {}) const {
         if (dims.empty()) {
             return setArrayData(values.data(), { values.size() });
         }
         return setArrayData(values.data(), dims);
     }
 
-    template <typename T, typename U>
-    inline void setArrayDataWithUnits(const std::vector<T>& values, U units, const std::vector<uint32_t>& dims = {}) const {
+    template <typename DataType, typename UnitsType>
+    inline void setArrayDataWithUnits(const std::vector<DataType>& values, UnitsType units, const std::vector<uint32_t>& dims = {}) const {
         if (dims.empty()) {
             return setArrayDataWithUnits(values.data(), units, { values.size() });
         }
         return setArrayDataWithUnits(values.data(), units, dims);
     }
 
-    template <typename T>
-    inline void setArrayData(const T * values, const std::vector<uint32_t>& dims) const {
+    template <typename DataType>
+    inline void setArrayData(const DataType * values, const std::vector<uint32_t>& dims) const {
         putRecord(Data::FromArray(values, dims));
     }
 
-    template <typename T, typename U>
-    inline void setArrayDataWithUnits(const T * values, U units, const std::vector<uint32_t>& dims) const {
+    template <typename DataType, typename UnitsType>
+    inline void setArrayDataWithUnits(const DataType * values, UnitsType units, const std::vector<uint32_t>& dims) const {
         putRecord(WithUnits(Data::FromArray(values, dims), Data::FromScalar(units)));
     }
 
-    template <typename Value>
-    void putRow(int segmentLength, Value value, int64_t timestamp);
+    template <typename ValueType>
+    void putRow(int segmentLength, ValueType value, int64_t timestamp);
 
-    template <typename Values>
-    void putSegment(Values values, int index = -1);
+    template <typename ValueArrayType>
+    void putSegment(ValueArrayType values, int index = -1);
 
-    template <typename Values>
-    inline void putTimestampedSegment(std::vector<int64_t> timestamps, Values values) {
+    template <typename ValueArrayType>
+    inline void putTimestampedSegment(std::vector<int64_t> timestamps, ValueArrayType values) {
         putTimestampedSegment(timestamps.data(), values);
     }
 
-    template <typename Values>
-    void putTimestampedSegment(int64_t * timestamps, Values values);
+    template <typename ValueArrayType>
+    void putTimestampedSegment(int64_t * timestamps, ValueArrayType values);
 
-    template <typename StartIndex, typename EndIndex, typename Dimension, typename Values>
+    template <
+        typename StartIndexType,
+        typename EndIndexType,
+        typename DimensionType,
+        typename ValueArrayType
+    >
     void makeSegment(
-        StartIndex startIndex,
-        EndIndex endIndex,
-        Dimension dimension,
-        Values values,
+        StartIndexType startIndex,
+        EndIndexType endIndex,
+        DimensionType dimension,
+        ValueArrayType values,
         int index = -1,
         int rowsFilled = -1
     ) const;
 
-    template <typename StartIndex, typename EndIndex, typename Dimension, typename Values>
+    template <
+        typename StartIndexType,
+        typename EndIndexType,
+        typename DimensionType,
+        typename ValueArrayType
+    >
     void makeSegmentResampled(
-        StartIndex startIndex,
-        EndIndex endIndex,
-        Dimension dimension,
-        Values values,
+        StartIndexType startIndex,
+        EndIndexType endIndex,
+        DimensionType dimension,
+        ValueArrayType values,
         const TreeNode& resampleNode,
         int resampleFactor,
         int index = -1,
         int rowsFilled = -1
     ) const;
 
-    // template <typename StartIndex, typename EndIndex, typename Dimension, typename Values>
+    // template <typename StartIndexType, typename EndIndexType, typename DimensionType, typename ValueArrayType>
     // void makeSegmentMinMax(
-    //     StartIndex startIndex,
-    //     EndIndex endIndex,
-    //     Dimension dimension,
-    //     Values values,
+    //     StartIndexType startIndex,
+    //     EndIndexType endIndex,
+    //     DimensionType dimension,
+    //     ValueArrayType values,
     //     const TreeNode& resampleNode,
     //     int resampleFactor,
     //     int index = -1,
     //     int rowsFilled = -1
     // ) const;
 
-    // template <typename Timestamps, typename Values>
+    // template <typename TimestampArrayType, typename ValueArrayType>
     // inline void makeTimestampedSegment(
-    //     Timestamps timestamps,
-    //     Values values,
+    //     TimestampArrayType timestamps,
+    //     ValueArrayType values,
     //     int index = -1,
     //     int rowsFilled = -1
     // ) const;
 
-    // template <typename Values>
+    // template <typename ValueArrayType>
     // inline void makeTimestampedSegment(
     //     Int64Array timestamps,
-    //     Values values,
+    //     ValueArrayType values,
     //     int index = -1,
     //     int rowsFilled = -1
     // ) const;
 
-    template <typename Values>
+    template <typename ValueArrayType>
     inline void makeTimestampedSegment(
         std::vector<int64_t> timestamps,
-        Values values,
+        ValueArrayType values,
         int index = -1,
         int rowsFilled = -1
     ) const
@@ -575,10 +588,10 @@ public:
         makeTimestampedSegment(timestamps.data(), values, index, rowsFilled);
     }
 
-    template <typename Values>
+    template <typename ValueArrayType>
     void makeTimestampedSegment(
         int64_t * timestamps,
-        Values values,
+        ValueArrayType values,
         int index = -1,
         int rowsFilled = -1
     ) const;
@@ -589,8 +602,8 @@ protected:
 
     int _nid = -1;
 
-    template <typename T>
-    T _getNCI(nci_t code) const;
+    template <typename ResultType>
+    ResultType _getNCI(nci_t code) const;
 
     std::string _getStringNCI(nci_t code, int16_t size) const;
 
@@ -605,7 +618,6 @@ std::string to_string(const TreeNode * node);
 inline std::string to_string(const TreeNode& node) {
     return to_string(&node);
 }
-
 
 enum class Mode
 {
@@ -697,11 +709,11 @@ public:
 
     TreeNode getDefaultNode() const;
 
-    template <typename T = Data, typename ...Args>
-    T compileData(std::string_view expression, Args... args) const;
+    template <typename ResultType = Data, typename ...ArgTypes>
+    ResultType compileData(std::string_view expression, ArgTypes... args) const;
 
-    template <typename T = Data, typename ...Args>
-    T executeData(std::string_view expression, Args... args) const;
+    template <typename ResultType = Data, typename ...ArgTypes>
+    ResultType executeData(std::string_view expression, ArgTypes... args) const;
 
 private:
 
@@ -723,8 +735,8 @@ inline std::string to_string(const Tree& tree) {
     return to_string(&tree);
 }
 
-template <typename T /*= Data*/, typename ...Args>
-T Tree::compileData(std::string_view expression, Args... args) const
+template <typename ResultType /*= Data*/, typename ...ArgTypes>
+ResultType Tree::compileData(std::string_view expression, ArgTypes... args) const
 {
     int status;
     mdsdsc_t dscExp = StringViewToDescriptor(expression);
@@ -745,11 +757,11 @@ T Tree::compileData(std::string_view expression, Args... args) const
         arg.free();
     }
 
-    return Data(std::move(out), getTree()).releaseAndConvert<T>();
+    return Data(std::move(out), getTree()).releaseAndConvert<ResultType>();
 }
 
-template <typename T /*= Data*/, typename ...Args>
-T Tree::executeData(std::string_view expression, Args... args) const
+template <typename ResultType /*= Data*/, typename ...ArgTypes>
+ResultType Tree::executeData(std::string_view expression, ArgTypes... args) const
 {
     int status;
     mdsdsc_t dscExp = StringViewToDescriptor(expression);
@@ -770,11 +782,25 @@ T Tree::executeData(std::string_view expression, Args... args) const
         arg.free();
     }
 
-    return Data(std::move(out), getTree()).releaseAndConvert<T>();
+    return Data(std::move(out), getTree()).releaseAndConvert<ResultType>();
 }
 
-template <typename Value>
-void TreeNode::putRow(int segmentLength, Value value, int64_t timestamp)
+template <typename DataType /*= Data*/>
+[[nodiscard]]
+inline DataType TreeNode::getData() const {
+    return getRecord().releaseAndConvert<DataType>();
+}
+
+template <typename DataType /*= Data*/, typename UnitsType /*= Data*/>
+[[nodiscard]]
+inline std::tuple<DataType, UnitsType> TreeNode::getDataWithUnits() const {
+    auto data = getRecord();
+    auto units = data.getUnits<UnitsType>();
+    return { data.releaseAndConvert<DataType>(), std::move(units) };
+}
+
+template <typename ValueType>
+void TreeNode::putRow(int segmentLength, ValueType value, int64_t timestamp)
 {
     Argument argValue(value);
 
@@ -792,8 +818,8 @@ void TreeNode::putRow(int segmentLength, Value value, int64_t timestamp)
     argValue.free();
 }
 
-template <typename Values>
-void TreeNode::putSegment(Values values, int index /*= -1*/)
+template <typename ValueArrayType>
+void TreeNode::putSegment(ValueArrayType values, int index /*= -1*/)
 {
     Argument argValues(values);
 
@@ -810,8 +836,8 @@ void TreeNode::putSegment(Values values, int index /*= -1*/)
     argValues.free();
 }
 
-template <typename Values>
-void TreeNode::putTimestampedSegment(int64_t * timestamps, Values values)
+template <typename ValueArrayType>
+void TreeNode::putTimestampedSegment(int64_t * timestamps, ValueArrayType values)
 {
     Argument argValues(values);
 
@@ -848,12 +874,17 @@ inline int _getMaxRowsFilled(mdsdsc_a_t * dsc)
     return -1;
 }
 
-template <typename StartIndex, typename EndIndex, typename Dimension, typename Values>
+template <
+    typename StartIndexType,
+    typename EndIndexType,
+    typename DimensionType,
+    typename ValueArrayType
+>
 void TreeNode::makeSegment(
-    StartIndex startIndex,
-    EndIndex endIndex,
-    Dimension dimension,
-    Values values,
+    StartIndexType startIndex,
+    EndIndexType endIndex,
+    DimensionType dimension,
+    ValueArrayType values,
     int index /*= -1*/,
     int rowsFilled /*= -1*/
 ) const
@@ -888,12 +919,17 @@ void TreeNode::makeSegment(
     argValues.free();
 }
 
-template <typename StartIndex, typename EndIndex, typename Dimension, typename Values>
+template <
+    typename StartIndexType,
+    typename EndIndexType,
+    typename DimensionType,
+    typename ValueArrayType
+>
 void TreeNode::makeSegmentResampled(
-    StartIndex startIndex,
-    EndIndex endIndex,
-    Dimension dimension,
-    Values values,
+    StartIndexType startIndex,
+    EndIndexType endIndex,
+    DimensionType dimension,
+    ValueArrayType values,
     const TreeNode& resampleNode,
     int resampleFactor,
     int index /*= -1*/,
@@ -932,12 +968,17 @@ void TreeNode::makeSegmentResampled(
     argValues.free();
 }
 
-// template <typename StartIndex, typename EndIndex, typename Dimension, typename Values>
+// template <
+//     typename StartIndexType,
+//     typename EndIndexType,
+//     typename DimensionType,
+//     typename ValueArrayType
+// >
 // void TreeNode::makeSegmentMinMax(
-//     StartIndex startIndex,
-//     EndIndex endIndex,
-//     Dimension dimension,
-//     Values values,
+//     StartIndexType startIndex,
+//     EndIndexType endIndex,
+//     DimensionType dimension,
+//     ValueArrayType values,
 //     const TreeNode& resampleNode,
 //     int resampleFactor,
 //     int index /*= -1*/,
@@ -976,10 +1017,10 @@ void TreeNode::makeSegmentResampled(
 //     argValues.free();
 // }
 
-template <typename Values>
+template <typename ValueArrayType>
 void TreeNode::makeTimestampedSegment(
     int64_t * timestamps,
-    Values values,
+    ValueArrayType values,
     int index /*= -1*/,
     int rowsFilled /*= -1*/
 ) const
@@ -1006,24 +1047,10 @@ void TreeNode::makeTimestampedSegment(
     argValues.free();
 }
 
-template <typename T /*= Data*/>
-[[nodiscard]]
-inline T TreeNode::getData() const {
-    return getRecord().releaseAndConvert<T>();
-}
-
-template <typename T /*= Data*/, typename U /*= Data*/>
-[[nodiscard]]
-inline std::tuple<T, U> TreeNode::getDataWithUnits() const {
-    auto data = getRecord();
-    auto units = data.getUnits<U>();
-    return { data.releaseAndConvert<T>(), std::move(units) };
-}
-
-template <typename T>
-inline T TreeNode::_getNCI(nci_t code) const
+template <typename ResultType>
+inline ResultType TreeNode::_getNCI(nci_t code) const
 {
-    T value = {};
+    ResultType value = {};
     nci_itm itm_lst[] = {
         { sizeof(value), code, &value, nullptr },
         { 0, NciEND_OF_LIST, nullptr, nullptr },

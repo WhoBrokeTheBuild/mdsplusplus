@@ -111,7 +111,7 @@ public:
                     .NoWriteShot = true,
                 },
                 .Callback = [](TreeNode& node) {
-                    node.setTheseFlags(TreeNodeFlags{
+                    node.setFlagsOn(TreeNodeFlags{
                         .Cached = true,
                     });
                     // node.setExtendedAttribute("tooltip", "The Frequency in Hz");

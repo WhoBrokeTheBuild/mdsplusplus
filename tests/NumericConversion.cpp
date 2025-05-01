@@ -7,7 +7,7 @@ using namespace mdsplus;
 #define DEFINE_SCALAR_TEST(TYPE, EXPR, VALUE)                \
     TEST(NumericConversion, TYPE)                            \
     {                                                        \
-        TYPE::ctype value = VALUE;                         \
+        TYPE::__ctype value = VALUE;                         \
                                                              \
         TYPE data(value);                                    \
                                                              \
@@ -54,7 +54,7 @@ bool CompareVectors(const std::vector<T1>& vec1, const std::vector<T2>& vec2)
 #define DEFINE_ARRAY_TEST(TYPE, EXPR, ...)                                           \
     TEST(NumericConversion, TYPE)                                                    \
     {                                                                                \
-        std::vector<TYPE::ctype> value = { __VA_ARGS__ };                          \
+        std::vector<TYPE::__ctype> value = { __VA_ARGS__ };                          \
                                                                                      \
         TYPE data(value);                                                            \
                                                                                      \

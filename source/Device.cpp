@@ -19,7 +19,7 @@ void Device::addParts(std::vector<DevicePart>&& parts) const
             node.putRecord(*part.Value);
         }
 
-        node.setTheseFlags(part.Flags);
+        node.setFlagsOn(part.Flags);
     }
 
     for (auto& part : parts)
