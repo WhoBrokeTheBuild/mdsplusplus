@@ -11,9 +11,9 @@ TEST(Data, Constructors)
     // This should not compile as the copy is deleted
     // auto dataCopy = data;
 
-    auto data_copy = data.clone();
+    auto dataClone = data.clone();
 
-    ASSERT_EQ(data.getValue(), data_copy.getValue());
+    ASSERT_EQ(data.getValue(), dataClone.getValue());
 }
 
 TEST(Data, Metadata)

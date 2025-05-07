@@ -1,8 +1,11 @@
-#include <mdsplusplus/Device.hpp>
+#ifndef MDSPLUS_DEVICE_INC_HPP
+#define MDSPLUS_DEVICE_INC_HPP
+
+#include "Device.hpp"
 
 namespace mdsplus {
 
-void Device::addParts(std::vector<DevicePart>&& parts) const
+inline void Device::addParts(std::vector<DevicePart>&& parts) const
 {
     auto defaultNode = getTree()->getDefaultNode();
     getTree()->setDefaultNode(*this);
@@ -29,10 +32,10 @@ void Device::addParts(std::vector<DevicePart>&& parts) const
             part.Value = nullptr;
         }
 
-        for (auto& [key, value] : part.XNCI) {
-            if (value) {
-                delete value;
-                value = nullptr;
+        for (auto& it : part.XNCI) {
+            if (it.second) {
+                delete it.second;
+                it.second = nullptr;
             }
         }
     }
@@ -41,3 +44,5 @@ void Device::addParts(std::vector<DevicePart>&& parts) const
 }
 
 } // namespace mdsplus
+
+#endif // MDSPLUS_DEVICE_INC_HPP

@@ -5,10 +5,15 @@
 #include <vector>
 
 #include "Data.hpp"
+#include "DataView.hpp"
 #include "Scalar.hpp"
 #include "Array.hpp"
+#include "APD.hpp"
 
 namespace mdsplus {
+
+class GetMany;
+class PutMany;
 
 class Connection
 {
@@ -34,13 +39,13 @@ public:
     }
 
     template <typename ResultType = Data, typename ...ArgTypes>
-    ResultType get(const std::string& expression, ArgTypes ...args) const
+    ResultType get(const std::string& expression, const ArgTypes& ...args) const
     {
         if (_local) {
             return Data::Execute<ResultType>(expression, args...);
         }
         else {
-            std::vector<Argument> argList({ Argument(args)... });
+            std::vector<DataView> argList({ DataView(args)... });
             return _get(expression, std::move(argList)).releaseAndConvert<ResultType>();
         }
     }
@@ -48,7 +53,7 @@ public:
     template <typename ResultType = Data, typename ...ArgTypes>
     ResultType getObject(const std::string& expression, ArgTypes ...args) const
     {
-        UInt8Array serializedData = get<UInt8Array>("serializeout(`(" + expression + ";))", args...);
+        Int8Array serializedData = get<Int8Array>("SerializeOut(`(" + expression + ";))", args...);
         return serializedData.deserialize<ResultType>();
     }
 
@@ -75,23 +80,24 @@ public:
     }
 
     template <typename ...Args>
-    void put(const std::string& node, const std::string& expression, const Args& ...args) const
+    inline void put(const std::string& node, const std::string& expression, const Args& ...args) const
     {
         std::string putExpression = "TreePut($,$";
         for (size_t i = 0; i < sizeof...(args) - 2; ++i) {
             putExpression += ",$";
         }
         putExpression += ")";
-        
+
         get(putExpression, node, expression, args...);
     }
 
-    // getMany
+    GetMany getMany() const;
+
     // putMany
 
 private:
 
-    Data _get(const std::string& expression, std::vector<Argument>&& xdArgs) const;
+    Data _get(const std::string& expression, std::vector<DataView>&& xdArgs) const;
 
     int _id = InvalidConnectionID;
 
@@ -100,6 +106,65 @@ private:
     bool _local = false;
 
 }; // class Connection
+
+class GetMany
+{
+public:
+
+    GetMany(const Connection * conn)
+        : _conn(conn)
+    { }
+
+    template <typename ...ArgTypes>
+    void append(const std::string& name, const std::string& expression, const ArgTypes& ...args)
+    {
+        // _queries.emplace_back(std::unordered_map<std::string, Data>{
+        //     { "name", String(name) },
+        //     { "exp", String(expression), },
+        //     { "args", List(args...) },
+        // });
+        _queries.emplace_back(Dictionary(
+            "name", name,
+            "exp", expression,
+            "args", List(args...)
+        ));
+    }
+
+    const Dictionary& execute()
+    {
+        printf("%s\n", to_string(List(_queries).serialize()).c_str());
+        Data result = _conn->get("GetManyExecute($)", List(_queries).serialize());
+
+        if (result.getClass() == Class::S) {
+            if (result.getDType() == DType::T) {
+                // TODO: Read error
+                throw MDSplusException();
+            }
+            else if (result.getDType() == DType::L) {
+                int status = result.releaseAndConvert<Int32>().getValue();
+                throwException(status);
+            }
+        }
+
+        _result = result.releaseAndConvert<UInt8Array>().deserialize<Dictionary>();
+        return _result;
+    }
+
+private:
+
+    const Connection * _conn;
+
+    // std::vector<std::unordered_map<std::string, Data>> _queries;
+
+    std::vector<Dictionary> _queries;
+
+    Dictionary _result;
+
+}; // class GetMany
+
+inline GetMany Connection::getMany() const {
+    return GetMany(this);
+}
 
 } // namespace mdsplus
 

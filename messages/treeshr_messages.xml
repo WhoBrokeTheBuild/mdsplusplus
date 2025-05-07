@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+
+<!-- 
+     Copyright (c) 2017, Massachusetts Institute of Technology All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+Redistributions of source code must retain the above copyright notice, this
+list of conditions and the following disclaimer.
+
+Redistributions in binary form must reproduce the above copyright notice, this
+list of conditions and the following disclaimer in the documentation and/or
+other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+-->
+<messages>
+  <facility name="Tree" value="4049">
+    <status name="ALREADY_OFF" nicename="NodeAlreadyOff" value="4101" severity="Info" text="Node is already OFF"/>
+    <status name="ALREADY_ON" nicename="NodeAlreadyOn"  value="4102" severity="Info" text="Node is already ON"/>
+    <status name="ALREADY_OPEN" nicename="NodeAlreadyOpen" value="4103" severity="Info" text="Tree is already OPEN"/>
+    <status name="ALREADY_THERE" nicename="NodeAlreadyThere" value="4113" severity="Warning" text="Node is already in the tree"/>
+    <status name="BADRECORD" nicename="BadRecord" value="4119" severity="Error" text="Data corrupted: cannot read record"/>
+    <status name="BOTH_OFF" nicename="NodeAndParentOff" value="4115" severity="Warning" text="Both this node and its parent are off"/>
+    <status name="BUFFEROVF" nicename="BufferOverflow" value="4130" severity="Error" text="Output buffer overflow"/>
+    <status name="CONGLOMFULL" nicename="ConglomFull" value="4132" severity="Error" text="Current conglomerate is full"/>
+    <status name="CONGLOM_NOT_FULL" nicename="ConglomNotFull" value="4133" severity="Error" text="Current conglomerate is not yet full"/>
+    <status name="CONTINUING" nicename="Continuing" value="4396" severity="Info" text="Operation continuing: note following error"/>
+    <status name="DUPTAG" nicename="DuplicateTag" value="4121" severity="Error" text="Tag name already in use"/>
+    <status name="EDITING" nicename="NotPermittedWhileEditing" value="4146" severity="Error" text="Tree file open for edit: operation not permitted"/>
+    <status name="ILLEGAL_ITEM" nicename="IllegalItem" value="4129" severity="Error" text="Invalid item code or part number specified"/>
+    <status name="ILLPAGCNT" nicename="IllegalPageCount" value="4122" severity="Error" text="Illegal page count, error mapping tree file"/>
+    <status name="INVDFFCLASS" nicename="InvalidDataFormatClass" value="4135" severity="Error" text="Invalid data fmt: only CLASS_S can have data in NCI"/>
+    <status name="INVDTPUSG" nicename="InvalidPutUsage" value="4145" severity="Error" text="Attempt to store datatype which conflicts with the designated usage of this node"/>
+    <status name="INVPATH" nicename="InvalidPath" value="4128" severity="Error" text="Invalid tree pathname specified"/>
+    <status name="INVRECTYP" nicename="InvalidRecordType" value="4136" severity="Error" text="Record type invalid for requested operation"/>
+    <status name="INVTREE" nicename="InvalidTreeStructure" value="4120" severity="Error" text="Invalid tree identification structure"/>
+    <status name="MAXOPENEDIT" nicename="MaxOpenForEdit" value="4123" severity="Error" text="Too many files open for edit"/>
+    <status name="NEW" nicename="New" value="4099" severity="Info" text="New tree created"/>
+    <status name="NMN" nicename="NoMoreNodes" value="4108" severity="Warning" text="No More Nodes"/>
+    <status name="NMT" nicename="NoMoreTags" value="4109" severity="Warning" text="No More Tags"/>
+    <status name="NNF" nicename="NodeNotFound" value="4110" severity="Warning" text="Node Not Found"/>
+    <status name="NODATA" nicename="NoData" value="4124" severity="Error" text="No data available for this node"/>
+    <status name="NODNAMLEN" nicename="NodeNameTooLong" value="4137" severity="Error" text="Node name too long (12 chars max)"/>
+    <status name="NOEDIT" nicename="NotOpenForEdit" value="4126" severity="Error" text="Tree file is not open for edit"/>
+    <status name="NOLOG" nicename="NoPathDefined" value="4149" severity="Error" text="Experiment pathname (xxx_path) not defined"/>
+    <status name="NOMETHOD" nicename="NoMethod" value="4118" severity="Warning" text="Method not available for this object"/>
+    <status name="NOOVERWRITE" nicename="NodeWriteOnce" value="4144" severity="Error" text="Write-once node: overwrite not permitted"/>
+    <status name="NORMAL" nicename="Normal" value="4097" severity="Success" text="Normal successful completion" deprecated="SUCCESS"/>
+    <status name="NOTALLSUBS" nicename="SubtreesNotOpen" value="4100" severity="Info" text="Main tree opened but not all subtrees found/or connected"/>
+    <status name="NOTCHILDLESS" nicename="NodeHasChildren" value="4127" severity="Error" text="Node must be childless to become subtree reference"/>
+    <status name="NOT_IN_LIST" nicename="NotInList" value="4152" severity="Error" text="Tree being opened was not in the list"/>
+    <status name="NOTMEMBERLESS" nicename="NodeHasMembers" value="4142" severity="Error" text="Subtree reference can not have members"/>
+    <status name="NOTOPEN" value="4125" severity="Error" text="No tree file currently open" deprecated="TreeNOT_OPEN"/>
+    <status name="NOTSON" nicename="InvalidSubtreeNode" value="4143" severity="Error" text="Subtree reference cannot be a member"/>
+    <status name="NOT_CONGLOM" nicename="NotConglom" value="4140" severity="Error" text="Head node of conglomerate does not contain a DTYPE_CONGLOM record"/>
+    <status name="NOT_OPEN" nicename="NotOpen" value="4117" severity="Warning" text="Tree not currently open"/>
+    <status name="NOWRITEMODEL" nicename="NoWriteModel" value="4147" severity="Error" text="Data for this node can not be written into the MODEL file"/>
+    <status name="NOWRITESHOT" nicename="NoWriteShot" value="4148" severity="Error" text="Data for this node can not be written into the SHOT file"/>
+    <status name="NO_CONTEXT" nicename="NoContext" value="4104" severity="Info" text="There is no active search to end"/>
+    <status name="OFF" nicename="NodeIsOff" value="4116" severity="Warning" text="Node is OFF"/>
+    <status name="ON" nicename="NodeIsOn" value="4105" severity="Info" text="Node is ON"/>
+    <status name="OPEN" nicename="Open" value="4106" severity="Info" text="Tree is OPEN (no edit)"/>
+    <status name="OPEN_EDIT" nicename="OpenEdit" value="4107" severity="Info" text="Tree is OPEN for edit"/>
+    <status name="PARENT_OFF" nicename="ParentOff" value="4114" severity="Warning" text="Parent of this node is OFF"/>
+    <status name="READERR" nicename="RecordReadError" value="4151" severity="Error" text="Error reading record for node"/>
+    <status name="READONLY" nicename="ReadOnly" value="4150" severity="Error" text="Tree was opened with readonly access"/>
+    <status name="RESOLVED" nicename="Resolved" value="4098" severity="Success" text="Indirect reference successfully resolved"/>
+    <status name="SUCCESS" nicename="Success" value="4296" severity="Success" text="Operation successful"/>
+    <status name="TAGNAMLEN" nicename="TagNameTooLong" value="4138" severity="Error" text="Tagname too long (max 24 chars)"/>
+    <status name="TNF" nicename="TagNotFound" value="4111" severity="Warning" text="Tag Not Found"/>
+    <status name="TREENF" nicename="NotFound" value="4112" severity="Warning" text="Tree Not Found"/>
+    <status name="UNRESOLVED" nicename="Unresolved" value="4134" severity="Error" text="Not an indirect node reference: No action taken"/>
+    <status name="UNSPRTCLASS" nicename="UnsupportedClass" value="4131" severity="Error" text="Unsupported descriptor class"/>
+    <status name="UNSUPARRDTYPE" nicename="UnsupportedArrayType" value="4141" severity="Error" text="Complex data types not supported as members of arrays"/>
+    <status name="WRITEFIRST" nicename="NeedWriteFirst" value="4139" severity="Error" text="Tree has been modified:  write or quit first"/>
+    <status name="FAILURE" nicename="Failure" value="4596" severity="Error" text="Operation NOT successful"/>
+    <status name="LOCK_FAILURE" nicename="LockFailure" value="4598" severity="Warning" text="Error locking file, perhaps NFSLOCKING not enabled on this system"/>
+    <status name="FILE_NOT_FOUND" nicename="FileNotFound" value="4597" severity="Error" text="File or Directory Not Found"/>
+    <status name="CANCEL" nicename="Cancel" value="4496" severity="Warning" text="User canceled operation"/>
+    <status name="UNSUPTHICKOP" nicename="UnsupportedThickOperation" value="4497" severity="Warning" text="Unsupported thick client operation"/>
+    <status name="NOSEGMENTS" nicename="NoSegments" value="4599" severity="Error" text="No segments exist in this node"/>
+    <status name="INVDTYPE" nicename="InvalidSegmentDataType" value="4600" severity="Error" text="Invalid datatype for data segment"/>
+    <status name="INVSHAPE" nicename="InvalidSegmentShape" value="4601" severity="Error" text="Invalid shape for this data segment"/>
+    <status name="INVSHOT" nicename="InvalidShot" value="4603" severity="Error" text="Invalid shot number - must be -1 (model), 0 (current), or Positive"/>
+    <status name="INVTAG" nicename="InvalidTag" value="4605" severity="Error" text="Invalid tagname - must begin with alpha followed by 0-22 alphanumeric or underscores"/>
+    <status name="NOPATH" nicename="NoPath" value="4606" severity="Error" text="No 'treename'_path or default_tree_path environment variables defined. Cannot locate tree files."/>
+    <status name="TREEFILEREADERR" nicename="TreeFileReadError" value="4607" severity="Error" text="Error reading in tree file contents."/>
+    <status name="MEMERR" nicename="MemoryAllocateError" value="4608" severity="Error" text="Memory allocation error."/>
+    <status name="NOCURRENT" nicename="NoCurrentShot" value="4609" severity="Error" text="No current shot number set for this tree."/>
+    <status name="FOPENW" nicename="OpenReadWriteFailed" value="4610" severity="Error" text="Error opening file for read-write."/>
+    <status name="FOPENR" nicename="OpenReadOnlyFailed" value="4611" severity="Error" text="Error opening file read-only."/>
+    <status name="FCREATE" nicename="CreateFailed" value="4612" severity="Error" text="Error creating new file."/>
+    <status name="CONNECTFAIL" nicename="ConnectFailed" value="4613" severity="Error" text="Error connecting to remote server."/>
+    <status name="NCIWRITE" nicename="NCIWriteError" value="4614" severity="Error" text="Error writing node characterisitics to file."/>
+    <status name="DELFAIL" nicename="DeleteFailed" value="4615" severity="Error" text="Error deleting file."/>
+    <status name="RENFAIL" nicename="RenameFailed" value="4616" severity="Error" text="Error renaming file."/>
+    <status name="EMPTY" nicename="Empty" value="4617" severity="Warning" text="Empty string provided."/>
+    <status name="PARSEERR" nicename="ParseError" value="4618" severity="Error" text="Invalid node search string."/>
+    <status name="NCIREAD" nicename="NCIReadError" value="4619" severity="Error" text="Error reading node characteristics from file."/>
+    <status name="NOVERSION" nicename="NoVersion" value="4620" severity="Error" text="No version available."/>
+    <status name="DFREAD" nicename="DatafileReadError" value="4621" severity="Error" text="Error reading from datafile."/>
+    <status name="CLOSEERR" nicename="FileCloseError" value="4622" severity="Error" text="Error closing temporary tree file."/>
+    <status name="MOVEERROR" nicename="FileOverwriteError" value="4623" severity="Error" text="Error replacing original treefile with new one."/>
+    <status name="OPENEDITERR" nicename="OpenFileForEditError" value="4624" severity="Error" text="Error reopening new treefile for write access."/>
+    <status name="READONLY_TREE" nicename="OpenReadOnly" value="4625" severity="Error" text="Tree is marked as readonly. No write operations permitted."/>
+    <status name="WRITETREEERR" nicename="WriteTreeFileError" value="4626" severity="Error" text="Error writing .tree file"/>
+    <status name="NOWILD" nicename="WildcardInNodeSpecifier" value="4627" severity="Error" text="No wildcard characters permitted in node specifier"/>
+  </facility>
+</messages>

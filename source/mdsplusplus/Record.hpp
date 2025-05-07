@@ -2,6 +2,7 @@
 #define MDSPLUS_RECORD_HPP
 
 #include "Data.hpp"
+#include "DataView.hpp"
 
 namespace mdsplus {
 
@@ -59,7 +60,7 @@ public:
         return ResultType();
     }
 
-}; // class Record<>
+}; // class Record
 
 #define MDSPLUS_RECORD_BOOTSTRAP(RecordType, DataType)           \
                                                                  \
@@ -74,7 +75,7 @@ public:
     RecordType(RecordType &&) = default;                         \
     RecordType &operator=(RecordType &&) = default;              \
                                                                  \
-    inline std::string_view getClassName() const override {      \
+    inline const char * getClassName() const override {          \
         return #RecordType;                                      \
     }                                                            \
                                                                  \
@@ -83,6 +84,23 @@ public:
         return _clone<RecordType>();                             \
     }
 
+#define MDSPLUS_RECORD_CUSTOMIZATION(RecordType)                 \
+    template <>                                                  \
+    inline RecordType Data::releaseAndConvert()                  \
+    {                                                            \
+        mdsdsc_xd_t xd = release();                              \
+        mdsdsc_t * dsc = xd.pointer;                             \
+                                                                 \
+        if (dsc->class_ == class_t(RecordType::__class) &&       \
+            dsc->dtype == dtype_t(RecordType::__dtype)) {        \
+            return RecordType(std::move(xd), getTree());         \
+        }                                                        \
+                                                                 \
+        MdsFree1Dx(&xd, nullptr);                                \
+        throw TdiInvalidDataType();                              \
+    }
+
+
 class Param : public Record
 {
 public:
@@ -90,8 +108,8 @@ public:
     MDSPLUS_RECORD_BOOTSTRAP(Param, DType::Param)
 
     template <
-        typename ValueType, 
-        typename HelpType, 
+        typename ValueType,
+        typename HelpType,
         typename ValidationType
     >
     Param(
@@ -99,11 +117,9 @@ public:
         const HelpType& help,
         const ValidationType& validation
     ) {
-        int status;
-
-        Argument argValue(value);
-        Argument argHelp(help);
-        Argument argValidation(validation);
+        DataView argValue(value);
+        DataView argHelp(help);
+        DataView argValidation(validation);
 
         DESCRIPTOR_PARAM(dsc,
             argValue.getDescriptor(),
@@ -111,14 +127,10 @@ public:
             argValidation.getDescriptor()
         );
 
-        status = MdsCopyDxXd((mdsdsc_t *)&dsc, &_xd);
+        int status = MdsCopyDxXd((mdsdsc_t *)&dsc, &_xd);
         if (IS_NOT_OK(status)) {
             throwException(status);
         }
-
-        argValue.free();
-        argHelp.free();
-        argValidation.free();
     }
 
     template <typename ValueType = Data>
@@ -139,8 +151,9 @@ public:
         return getDescriptorAt<ValidationType>(2);
     }
 
-
 }; // class Param
+
+MDSPLUS_RECORD_CUSTOMIZATION(Param)
 
 class Signal : public Record
 {
@@ -149,8 +162,8 @@ public:
     MDSPLUS_RECORD_BOOTSTRAP(Signal, DType::Signal)
 
     template <
-        typename ValueType, 
-        typename RawType, 
+        typename ValueType,
+        typename RawType,
         typename DimensionType
     >
     Signal(
@@ -158,11 +171,9 @@ public:
         const RawType& raw,
         const DimensionType& dimension = {}
     ) {
-        int status;
-
-        Argument argValue(value);
-        Argument argRaw(raw);
-        Argument argDimension(dimension);
+        DataView argValue(value);
+        DataView argRaw(raw);
+        DataView argDimension(dimension);
 
         DESCRIPTOR_SIGNAL_1(dsc,
             argValue.getDescriptor(),
@@ -170,14 +181,10 @@ public:
             argDimension.getDescriptor()
         );
 
-        status = MdsCopyDxXd((mdsdsc_t *)&dsc, &_xd);
+        int status = MdsCopyDxXd((mdsdsc_t *)&dsc, &_xd);
         if (IS_NOT_OK(status)) {
             throwException(status);
         }
-        
-        argValue.free();
-        argRaw.free();
-        argDimension.free();
     }
 
     template <
@@ -190,11 +197,9 @@ public:
         const RawType& raw,
         const DimensionTypes& ...dimensions
     ) {
-        int status;
-
-        Argument argValue(value);
-        Argument argRaw(raw);
-        std::vector<Argument> argDimensions = { Argument(dimensions)... };
+        DataView argValue(value);
+        DataView argRaw(raw);
+        std::vector<DataView> argDimensions = { DataView(dimensions)... };
 
         DESCRIPTOR_SIGNAL(dsc,
             sizeof...(dimensions),
@@ -206,16 +211,9 @@ public:
             dsc.dimensions[i] = argDimensions[i].getDescriptor();
         }
 
-        status = MdsCopyDxXd((mdsdsc_t *)&dsc, &_xd);
+        int status = MdsCopyDxXd((mdsdsc_t *)&dsc, &_xd);
         if (IS_NOT_OK(status)) {
             throwException(status);
-        }
-
-        argValue.free();
-        argRaw.free();
-
-        for (size_t i = 0; i < argDimensions.size(); ++i) {
-            argDimensions[i].free();
         }
     }
 
@@ -239,7 +237,7 @@ public:
 
     template <typename DimensionType = Data>
     [[nodiscard]]
-    inline DimensionType getDimensions() const {
+    inline std::vector<DimensionType> getDimensions() const {
         std::vector<DimensionType> dims;
         size_t count = getNumDescriptors() - 2;
         for (size_t i = 0; i < count; ++i) {
@@ -250,6 +248,8 @@ public:
 
 }; // class Signal
 
+MDSPLUS_RECORD_CUSTOMIZATION(Signal)
+
 class Dimension : public Record
 {
 public:
@@ -259,23 +259,18 @@ public:
     template <typename WindowType, typename AxisType>
     Dimension(const WindowType& window, const AxisType& axis)
     {
-        int status;
-
-        Argument tmpWindow(window);
-        Argument tmpAxis(axis);
+        DataView tmpWindow(window);
+        DataView tmpAxis(axis);
 
         DESCRIPTOR_DIMENSION(dsc,
             tmpWindow.getDescriptor(),
             tmpAxis.getDescriptor()
         );
 
-        status = MdsCopyDxXd((mdsdsc_t *)&dsc, &_xd);
+        int status = MdsCopyDxXd((mdsdsc_t *)&dsc, &_xd);
         if (IS_NOT_OK(status)) {
             throwException(status);
         }
-
-        tmpWindow.free();
-        tmpAxis.free();
     }
 
     template <typename WindowType = Data>
@@ -292,12 +287,14 @@ public:
 
 }; // class Dimension
 
+MDSPLUS_RECORD_CUSTOMIZATION(Dimension)
+
 class Window : public Record
 {
 public:
 
     MDSPLUS_RECORD_BOOTSTRAP(Window, DType::Window)
-    
+
     template <
         typename StartIndexType,
         typename EndIndexType,
@@ -308,11 +305,9 @@ public:
         const EndIndexType& endIndex,
         const ValueType& valueAtIndex0
     ) {
-        int status;
-
-        Argument argStartIndex(startIndex);
-        Argument argEndIndex(endIndex);
-        Argument argValueAtIndex0(valueAtIndex0);
+        DataView argStartIndex(startIndex);
+        DataView argEndIndex(endIndex);
+        DataView argValueAtIndex0(valueAtIndex0);
 
         DESCRIPTOR_WINDOW(dsc,
             argStartIndex.getDescriptor(),
@@ -320,14 +315,10 @@ public:
             argValueAtIndex0.getDescriptor()
         );
 
-        status = MdsCopyDxXd((mdsdsc_t *)&dsc, &_xd);
+        int status = MdsCopyDxXd((mdsdsc_t *)&dsc, &_xd);
         if (IS_NOT_OK(status)) {
             throwException(status);
         }
-
-        argStartIndex.free();
-        argEndIndex.free();
-        argValueAtIndex0.free();
     }
 
     template <typename StartIndexType = Data>
@@ -350,6 +341,8 @@ public:
 
 }; // class Window
 
+MDSPLUS_RECORD_CUSTOMIZATION(Window)
+
 class Function : public Record
 {
 public:
@@ -359,12 +352,10 @@ public:
     template <typename ...ArgTypes>
     Function(opcode_t opcode, const ArgTypes& ...args)
     {
-        int status;
-
         // TODO: #define MAX_ARGS 255 ?
-        static_assert(sizeof...(args) <= 255);
+        static_assert(sizeof...(args) <= 255, "Function's are limited to 254 arguments");
 
-        std::vector<Argument> argList = { Argument(args)... };
+        std::vector<DataView> argList = { DataView(args)... };
 
         DESCRIPTOR_FUNCTION(dsc, &opcode, sizeof...(args));
 
@@ -372,19 +363,17 @@ public:
             dsc.arguments[i] = argList[i].getDescriptor();
         }
 
-        status = MdsCopyDxXd((mdsdsc_t *)&dsc, &_xd);
+        int status = MdsCopyDxXd((mdsdsc_t *)&dsc, &_xd);
         if (IS_NOT_OK(status)) {
             throwException(status);
-        }
-
-        for (auto& arg : argList) {
-            arg.free();
         }
     }
 
     Data call() const;
 
 }; // class Function
+
+MDSPLUS_RECORD_CUSTOMIZATION(Function)
 
 // TODO: Conglom?
 
@@ -404,11 +393,9 @@ public:
         const EndingType& ending,
         const DeltaType& delta
     ) {
-        int status;
-
-        Argument argBegin(begin);
-        Argument argEnding(ending);
-        Argument argDelta(delta);
+        DataView argBegin(begin);
+        DataView argEnding(ending);
+        DataView argDelta(delta);
 
         DESCRIPTOR_RANGE(dsc,
             argBegin.getDescriptor(),
@@ -416,14 +403,10 @@ public:
             argDelta.getDescriptor()
         );
 
-        status = MdsCopyDxXd((mdsdsc_t *)&dsc, &_xd);
+        int status = MdsCopyDxXd((mdsdsc_t *)&dsc, &_xd);
         if (IS_NOT_OK(status)) {
             throwException(status);
         }
-
-        argBegin.free();
-        argEnding.free();
-        argDelta.free();
     }
 
     template <typename BeginType = Data>
@@ -449,6 +432,8 @@ public:
 
 }; // class Range
 
+MDSPLUS_RECORD_CUSTOMIZATION(Range)
+
 // TODO: Action
 // TODO: Dispatch
 // TODO: Routine?
@@ -464,23 +449,18 @@ public:
     template <typename ValueType, typename UnitsType>
     WithUnits(const ValueType& value, const UnitsType& units)
     {
-        int status;
-
-        Argument argValue(value);
-        Argument argUnits(units);
+        DataView argValue(value);
+        DataView argUnits(units);
 
         DESCRIPTOR_WITH_UNITS(dsc,
             argValue.getDescriptor(),
             argUnits.getDescriptor()
         );
 
-        status = MdsCopyDxXd((mdsdsc_t *)&dsc, &_xd);
+        int status = MdsCopyDxXd((mdsdsc_t *)&dsc, &_xd);
         if (IS_NOT_OK(status)) {
             throwException(status);
         }
-
-        argValue.free();
-        argUnits.free();
     }
 
     template <typename ValueType = Data>
@@ -497,6 +477,8 @@ public:
 
 }; // class WithUnits
 
+MDSPLUS_RECORD_CUSTOMIZATION(WithUnits)
+
 // TODO: Call?
 
 class WithError : public Record
@@ -508,23 +490,18 @@ public:
     template <typename ValueType, typename ErrorType>
     WithError(const ValueType& value, const ErrorType& error)
     {
-        int status;
-
-        Argument argValue(value);
-        Argument argError(error);
+        DataView argValue(value);
+        DataView argError(error);
 
         DESCRIPTOR_WITH_ERROR(dsc,
             argValue.getDescriptor(),
             argError.getDescriptor()
         );
 
-        status = MdsCopyDxXd((mdsdsc_t *)&dsc, &_xd);
+        int status = MdsCopyDxXd((mdsdsc_t *)&dsc, &_xd);
         if (IS_NOT_OK(status)) {
             throwException(status);
         }
-
-        argValue.free();
-        argError.free();
     }
 
     template <typename ValueType = Data>
@@ -541,9 +518,8 @@ public:
 
 }; // class WithError
 
-// TODO: List
-// TODO: Tuple
-// TODO: Dictionary
+MDSPLUS_RECORD_CUSTOMIZATION(WithError)
+
 // TODO: Opaque?
 
 } // namespace mdsplus

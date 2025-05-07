@@ -1,7 +1,11 @@
-#include <mdsplus.hpp>
+#ifndef MDSPLUS_CONNECTION_INC_HPP
+#define MDSPLUS_CONNECTION_INC_HPP
+
+#include "Connection.hpp"
 
 // TODO: Move this somewhere better
 extern "C" {
+
     int ConnectToMds(char *host);
     void DisconnectFromMds(int sockId);
     int SetCompressionLevel(int level);
@@ -29,11 +33,12 @@ extern "C" {
         void **m,
         int timeout
     );
-}
+
+} // extern "C"
 
 namespace mdsplus {
 
-void Connection::connect(const std::string& hostspec)
+inline void Connection::connect(const std::string& hostspec)
 {
     if (hostspec == "local") {
         _local = true;
@@ -50,7 +55,7 @@ void Connection::connect(const std::string& hostspec)
     _hostspec = hostspec;
 }
 
-void Connection::disconnect()
+inline void Connection::disconnect()
 {
     _local = false;
     
@@ -60,7 +65,7 @@ void Connection::disconnect()
     }
 }
 
-Data Connection::_get(const std::string& expression, std::vector<Argument>&& argList) const
+inline Data Connection::_get(const std::string& expression, std::vector<DataView>&& argList) const
 {
     int status;
     int argIndex = 0;
@@ -121,8 +126,6 @@ Data Connection::_get(const std::string& expression, std::vector<Argument>&& arg
         }
 
         ++argIndex;
-
-        arg.free();
     }
 
     // Switch to temporary variables and building a descriptor :(
@@ -191,3 +194,5 @@ Data Connection::_get(const std::string& expression, std::vector<Argument>&& arg
 }
 
 } // namespace mdsplus
+
+#endif // MDSPLUS_CONNECTION_INC_HPP
