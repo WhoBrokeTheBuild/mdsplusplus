@@ -18,17 +18,17 @@ find_package(Python COMPONENTS Interpreter REQUIRED)
 
 file(GLOB_RECURSE
     _source_list
-    "source/*.hpp"
+    ${CMAKE_CURRENT_SOURCE_DIR}/source/*.hpp
 )
 
-set(_single_header ${CMAKE_SOURCE_DIR}/include/mdsplus.hpp)
-set(_test_source ${CMAKE_SOURCE_DIR}/source/mdsplus.cpp)
+set(_single_header ${CMAKE_CURRENT_SOURCE_DIR}/include/mdsplus.hpp)
+set(_test_source ${CMAKE_CURRENT_SOURCE_DIR}/source/mdsplus.cpp)
 
 add_custom_command(
     OUTPUT ${_single_header}
     DEPENDS ${_source_list}
     COMMAND ${Python_EXECUTABLE} scripts/gen-single-header.py
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
 add_executable(
@@ -40,7 +40,7 @@ add_executable(
 target_include_directories(
     mdsplusplus-test
     PRIVATE
-        source
+        ${CMAKE_CURRENT_SOURCE_DIR}/source
 )
 
 target_link_libraries(
@@ -57,7 +57,7 @@ add_library(mdsplusplus INTERFACE)
 target_sources(
     mdsplusplus
     INTERFACE
-        ${CMAKE_SOURCE_DIR}/include/mdsplus.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/mdsplus.hpp
 )
 
 target_link_libraries(
@@ -72,7 +72,7 @@ target_link_libraries(
 target_include_directories(
     mdsplusplus
     INTERFACE
-        include
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
 install(TARGETS mdsplusplus)
