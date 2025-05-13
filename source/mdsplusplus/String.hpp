@@ -165,7 +165,6 @@ public:
 
         inline StringArray(const std::vector<std::string>& values, const std::vector<uint32_t>& dims = {}) {
             setValues(values, dims);
-            setTree(tree);
         }
 
     #endif // __cpp_lib_span
