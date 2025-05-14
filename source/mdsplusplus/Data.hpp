@@ -479,8 +479,8 @@ public:
         typename std::enable_if<std::is_base_of<Data, DataType>::value, bool>::type = true>
     inline bool operator==(const DataType& other) const
     {
-        // TODO: Should this always be the case?
-        if (getTree() != other.getTree()) {
+        // TODO: What if other has a tree?
+        if (getTree() != nullptr && other.getTree() != nullptr && getTree() != other.getTree()) {
             return false;
         }
 

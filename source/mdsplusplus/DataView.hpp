@@ -2,6 +2,7 @@
 #define MDSPLUS_DATA_VIEW_HPP
 
 #include "Data.hpp"
+#include "TreeNode.hpp"
 
 #include <type_traits>
 #include <typeindex>
@@ -37,7 +38,15 @@ public:
     DataView& operator=(const DataView&) = default;
 
     inline mdsdsc_t * getDescriptor() const {
+        if (_dsc.dtype == DTYPE_MISSING && _dsc.class_ == CLASS_MISSING) {
+            return nullptr;
+        }
+
         return (mdsdsc_t *)&_dsc;
+    }
+
+    inline Tree * getTree() const {
+        return _tree;
     }
 
     inline DataView(std::nullptr_t)
@@ -60,6 +69,7 @@ public:
             .class_ = CLASS_S,
             .pointer = (char *)value.getDescriptor(),
         })
+        , _tree(value.getTree())
     { }
 
     template <typename CType,
@@ -155,9 +165,21 @@ public:
 
     #endif // __cpp_lib_string_view
 
+    inline DataView(const TreeNode& node)
+        : _dsc(mdsdsc_a_t{
+            .length = sizeof(node._nid),
+            .dtype = DTYPE_NID,
+            .class_ = CLASS_S,
+            .pointer = const_cast<char *>(reinterpret_cast<const char *>(&node._nid)),
+        })
+        , _tree(node._tree)
+    { }
+
 private:
 
     mdsdsc_a_t _dsc = MDSDSC_XD_INITIALIZER;
+
+    Tree * _tree = nullptr;
 
     template <typename CType>
     inline dtype_t _getDTypeForCType()

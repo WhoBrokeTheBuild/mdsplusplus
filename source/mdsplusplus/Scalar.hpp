@@ -95,104 +95,6 @@ protected:
         _setValue<__ctype>(__dtype, value);                     \
     }
 
-class Int8 : public Scalar
-{
-public:
-
-    _MDSPLUS_SCALAR_BOOTSTRAP(Int8, int8_t, DType::B)
-
-}; // class Int8
-
-class UInt8 : public Scalar
-{
-public:
-
-    _MDSPLUS_SCALAR_BOOTSTRAP(UInt8, uint8_t, DType::BU)
-
-}; // class UInt8
-
-class Int16 : public Scalar
-{
-public:
-
-    _MDSPLUS_SCALAR_BOOTSTRAP(Int16, int16_t, DType::W)
-
-}; // class Int16
-
-class UInt16 : public Scalar
-{
-public:
-
-    _MDSPLUS_SCALAR_BOOTSTRAP(UInt16, uint16_t, DType::WU)
-
-}; // class UInt16
-
-class Int32 : public Scalar
-{
-public:
-
-    _MDSPLUS_SCALAR_BOOTSTRAP(Int32, int32_t, DType::L)
-
-}; // class Int32
-
-class UInt32 : public Scalar
-{
-public:
-
-    _MDSPLUS_SCALAR_BOOTSTRAP(UInt32, uint32_t, DType::LU)
-
-}; // class UInt32
-
-class Int64 : public Scalar
-{
-public:
-
-    _MDSPLUS_SCALAR_BOOTSTRAP(Int64, int64_t, DType::Q)
-
-}; // class Int32
-
-class UInt64 : public Scalar
-{
-public:
-
-    _MDSPLUS_SCALAR_BOOTSTRAP(UInt64, uint64_t, DType::QU)
-
-}; // class UInt64
-
-// TODO: Int128 / UInt128 ?
-
-class Float32 : public Scalar
-{
-public:
-
-    _MDSPLUS_SCALAR_BOOTSTRAP(Float32, float, DType::FS)
-
-}; // class Float32
-
-class Float64 : public Scalar
-{
-public:
-
-    _MDSPLUS_SCALAR_BOOTSTRAP(Float64, double, DType::FT)
-
-}; // class Float64
-
-class Complex32 : public Scalar
-{
-public:
-
-    _MDSPLUS_SCALAR_BOOTSTRAP(Complex32, std::complex<float>, DType::FSC)
-
-}; // class Complex32
-
-class Complex64 : public Scalar
-{
-public:
-
-    _MDSPLUS_SCALAR_BOOTSTRAP(Complex64, std::complex<double>, DType::FTC)
-
-}; // class Complex64
-
 #define _MDSPLUS_SCALAR_CUSTOMIZATION(ScalarType)                    \
                                                                      \
     template <>                                                      \
@@ -213,17 +115,126 @@ public:
         return ScalarType(value);                                    \
     }
 
+class Int8 : public Scalar
+{
+public:
+
+    _MDSPLUS_SCALAR_BOOTSTRAP(Int8, int8_t, DType::B)
+
+}; // class Int8
+
 _MDSPLUS_SCALAR_CUSTOMIZATION(Int8)
-_MDSPLUS_SCALAR_CUSTOMIZATION(Int16)
-_MDSPLUS_SCALAR_CUSTOMIZATION(Int32)
-_MDSPLUS_SCALAR_CUSTOMIZATION(Int64)
+
+class UInt8 : public Scalar
+{
+public:
+
+    _MDSPLUS_SCALAR_BOOTSTRAP(UInt8, uint8_t, DType::BU)
+
+}; // class UInt8
+
 _MDSPLUS_SCALAR_CUSTOMIZATION(UInt8)
+
+class Int16 : public Scalar
+{
+public:
+
+    _MDSPLUS_SCALAR_BOOTSTRAP(Int16, int16_t, DType::W)
+
+}; // class Int16
+
+_MDSPLUS_SCALAR_CUSTOMIZATION(Int16)
+
+class UInt16 : public Scalar
+{
+public:
+
+    _MDSPLUS_SCALAR_BOOTSTRAP(UInt16, uint16_t, DType::WU)
+
+}; // class UInt16
+
 _MDSPLUS_SCALAR_CUSTOMIZATION(UInt16)
+
+class Int32 : public Scalar
+{
+public:
+
+    _MDSPLUS_SCALAR_BOOTSTRAP(Int32, int32_t, DType::L)
+
+}; // class Int32
+
+_MDSPLUS_SCALAR_CUSTOMIZATION(Int32)
+
+class UInt32 : public Scalar
+{
+public:
+
+    _MDSPLUS_SCALAR_BOOTSTRAP(UInt32, uint32_t, DType::LU)
+
+}; // class UInt32
+
 _MDSPLUS_SCALAR_CUSTOMIZATION(UInt32)
+
+class Int64 : public Scalar
+{
+public:
+
+    _MDSPLUS_SCALAR_BOOTSTRAP(Int64, int64_t, DType::Q)
+
+}; // class Int32
+
+_MDSPLUS_SCALAR_CUSTOMIZATION(Int64)
+
+class UInt64 : public Scalar
+{
+public:
+
+    _MDSPLUS_SCALAR_BOOTSTRAP(UInt64, uint64_t, DType::QU)
+
+}; // class UInt64
+
 _MDSPLUS_SCALAR_CUSTOMIZATION(UInt64)
+
+// TODO: Int128 / UInt128 ?
+
+class Float32 : public Scalar
+{
+public:
+
+    _MDSPLUS_SCALAR_BOOTSTRAP(Float32, float, DType::FS)
+
+}; // class Float32
+
 _MDSPLUS_SCALAR_CUSTOMIZATION(Float32)
+
+class Float64 : public Scalar
+{
+public:
+
+    _MDSPLUS_SCALAR_BOOTSTRAP(Float64, double, DType::FT)
+
+}; // class Float64
+
 _MDSPLUS_SCALAR_CUSTOMIZATION(Float64)
+
+class Complex32 : public Scalar
+{
+public:
+
+    _MDSPLUS_SCALAR_BOOTSTRAP(Complex32, std::complex<float>, DType::FSC)
+
+}; // class Complex32
+
 _MDSPLUS_SCALAR_CUSTOMIZATION(Complex32)
+
+class Complex64 : public Scalar
+{
+public:
+
+    _MDSPLUS_SCALAR_BOOTSTRAP(Complex64, std::complex<double>, DType::FTC)
+
+}; // class Complex64
+
 _MDSPLUS_SCALAR_CUSTOMIZATION(Complex64)
 
 } // namespace mdsplus

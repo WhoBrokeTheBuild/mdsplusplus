@@ -64,6 +64,27 @@ inline void Tree::write()
     }
 }
 
+inline std::vector<std::string> Tree::findTagWild(const std::string& wildcard) const
+{
+    std::vector<std::string> tags;
+
+    int outnid = _nid;
+    void * findContext = nullptr;
+    while (true)
+    {
+        char * tag = _TreeFindTagWild(getDBID(), const_cast<char *>(wildcard.c_str()), &outnid, &findContext);
+        if (!tag) {
+            break;
+        }
+
+        tags.push_back(tag);
+    }
+
+    TreeFindTagEnd(&findContext);
+
+    return tags;
+}
+
 inline void Tree::setDefaultNode(const TreeNode& node) const
 {
     int status = _TreeSetDefaultNid(getDBID(), node.getNID());
@@ -121,6 +142,58 @@ ResultType Tree::executeData(const std::string& expression, ArgTypes... args) co
     }
 
     return Data(std::move(out), getTree()).releaseAndConvert<ResultType>();
+}
+
+template <typename ResultType>
+inline ResultType Tree::_getDBI(int16_t code) const
+{
+    ResultType value = {};
+    dbi_itm itm_lst[] = {
+        { sizeof(value), code, &value, nullptr },
+        { 0, DbiEND_OF_LIST, nullptr, nullptr },
+    };
+
+    int status = _TreeGetDbi(_tree->getDBID(), itm_lst);
+    if (IS_NOT_OK(status)) {
+        throwException(status);
+    }
+
+    return value;
+}
+
+inline std::string Tree::_getStringDBI(int16_t code, int16_t size) const
+{
+    std::string buffer;
+    buffer.resize(size);
+
+    int retlen = 0;
+    dbi_itm itemList[] = {
+        { size, code, (void *)buffer.data(), &retlen },
+        { 0, DbiEND_OF_LIST, nullptr, nullptr },
+    };
+
+    int status = _TreeGetDbi(getTree()->getDBID(), itemList);
+    if (IS_NOT_OK(status)) {
+        throwException(status);
+    }
+
+    buffer.resize(retlen);
+
+    return buffer;
+}
+
+inline void Tree::_setDBI(int16_t code, int value) const
+{
+    int retlen = 0;
+    dbi_itm itemList[] = {
+        { sizeof(value), code, &value },
+        { 0, DbiEND_OF_LIST, nullptr, nullptr },
+    };
+
+    int status = _TreeSetDbi(getTree()->getDBID(), itemList);
+    if (IS_NOT_OK(status)) {
+        throwException(status);
+    }
 }
 
 } // namespace mdsplus

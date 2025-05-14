@@ -29,6 +29,7 @@
 #include <cstring>
 #include <functional>
 #include <map>
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -3495,8 +3496,8 @@ public:
         typename std::enable_if<std::is_base_of<Data, DataType>::value, bool>::type = true>
     inline bool operator==(const DataType& other) const
     {
-        // TODO: Should this always be the case?
-        if (getTree() != other.getTree()) {
+        // TODO: What if other has a tree?
+        if (getTree() != nullptr && other.getTree() != nullptr && getTree() != other.getTree()) {
             return false;
         }
 
@@ -3578,6 +3579,838 @@ inline Data Data::FromScalar(std::nullptr_t) {
     return Data();
 }
 
+enum class Usage : uint8_t
+{
+    Any = TreeUSAGE_ANY,
+    Structure = TreeUSAGE_STRUCTURE,
+    Action = TreeUSAGE_ACTION,
+    Device = TreeUSAGE_DEVICE,
+    Dispatch = TreeUSAGE_DISPATCH,
+    Numeric = TreeUSAGE_NUMERIC,
+    Signal = TreeUSAGE_SIGNAL,
+    Task = TreeUSAGE_TASK,
+    Text = TreeUSAGE_TEXT,
+    Window = TreeUSAGE_WINDOW,
+    Axis = TreeUSAGE_AXIS,
+    Subtree = TreeUSAGE_SUBTREE,
+    CompoundData = TreeUSAGE_COMPOUND_DATA,
+
+}; // enum class Usage
+
+std::string to_string(const Usage& usage);
+
+struct TreeNodeFlags
+{
+    uint32_t State : 1;
+    uint32_t ParentState : 1;
+    uint32_t Essential : 1;
+    uint32_t Cached : 1;
+    uint32_t Versions : 1;
+    uint32_t Segmented : 1;
+    uint32_t SetupInformation : 1;
+    uint32_t WriteOnce : 1;
+    uint32_t Compressible : 1;
+    uint32_t DoNotCompress : 1;
+    uint32_t CompressOnPut : 1;
+    uint32_t NoWriteModel : 1;
+    uint32_t NoWriteShot : 1;
+    uint32_t PathReference : 1;
+    uint32_t NidReference : 1;
+    uint32_t IncludeInPulse : 1;
+    uint32_t CompressSegments : 1;
+    uint32_t : 15;
+
+}; // struct TreeNodeFlags
+
+static_assert(sizeof(TreeNodeFlags) == sizeof(uint32_t),
+    "sizeof(TreeNodeFlags) != sizeof(uint32_t)");
+
+std::string to_string(const TreeNodeFlags& flags);
+
+class Tree;
+class DataView;
+
+class TreeNode
+{
+    friend class DataView;
+
+public:
+
+    TreeNode() = default;
+
+    inline TreeNode(Tree * tree, int nid)
+        : _tree(tree)
+        , _nid(nid)
+    { }
+
+    virtual ~TreeNode() = default;
+
+    [[nodiscard]]
+    inline Tree * getTree() const {
+        return _tree;
+    }
+
+    [[nodiscard]]
+    void * getDBID() const;
+
+    [[nodiscard]]
+    void * getContext() const;
+
+    [[nodiscard]]
+    inline int getNID() const {
+        return _nid;
+    }
+
+    TreeNode getNode(const std::string& path) const;
+
+    TreeNode addNode(const std::string& path, Usage usage) const;
+
+    TreeNode addDevice(const std::string& path, const std::string& model) const;
+
+    [[nodiscard]]
+    inline uint64_t getTimeInserted() const {
+        return _getNCI<uint64_t>(NciTIME_INSERTED);
+    }
+
+    [[nodiscard]]
+    inline uint32_t getOwnerID() const {
+        return _getNCI<uint32_t>(NciOWNER_ID);
+    }
+
+    [[nodiscard]]
+    inline class_t getClass() const {
+        return _getNCI<class_t>(NciCLASS);
+    }
+
+    [[nodiscard]]
+    inline dtype_t getDType() const {
+        return _getNCI<dtype_t>(NciDTYPE);
+    }
+
+    [[nodiscard]]
+    inline uint32_t getLength() const {
+        return _getNCI<uint32_t>(NciLENGTH);
+    }
+
+    [[nodiscard]]
+    inline uint32_t getStatus() const {
+        return _getNCI<uint32_t>(NciSTATUS);
+    }
+
+    [[nodiscard]]
+    inline uint16_t getConglomorateElements() const {
+        return _getNCI<uint16_t>(NciCONGLOMERATE_ELT);
+    }
+
+    [[nodiscard]]
+    inline TreeNodeFlags getFlags() const {
+        return _getNCI<TreeNodeFlags>(NciGET_FLAGS);
+    }
+
+    inline void setFlagsOn(TreeNodeFlags flags) const {
+
+    }
+
+    inline void setFlagsOff(TreeNodeFlags flags) const {
+
+    }
+
+    inline void clearFlags(TreeNodeFlags flags) const {
+        setFlagsOff(flags);
+    }
+
+    [[nodiscard]]
+    inline uint32_t getFlagsInt() const {
+        return _getNCI<uint32_t>(NciGET_FLAGS);
+    }
+
+    [[nodiscard]]
+    std::string getNodeName() const;
+
+    [[nodiscard]]
+    inline std::string getPath() const {
+        return _getStringNCI(NciPATH, 1024);
+    }
+
+    [[nodiscard]]
+    inline uint32_t getDepth() const {
+        return _getNCI<uint32_t>(NciDEPTH);
+    }
+
+    [[nodiscard]]
+    inline int getParentNID() const {
+        return _getNCI<uint32_t>(NciPARENT);
+    }
+
+    [[nodiscard]]
+    inline TreeNode getParent() const {
+        int nid = getParentNID();
+        if (nid == 0) {
+            throw TreeNodeNotFound();
+        }
+        return TreeNode(_tree, nid);
+    }
+
+    [[nodiscard]]
+    inline int getBrotherNID() const {
+        return _getNCI<uint32_t>(NciPARENT);
+    }
+
+    [[nodiscard]]
+    inline TreeNode getBrother() const {
+        int nid = getBrotherNID();
+        if (nid == 0) {
+            throw TreeNodeNotFound();
+        }
+        return TreeNode(_tree, nid);
+    }
+
+    [[nodiscard]]
+    inline int getMemberID() const {
+        return _getNCI<uint32_t>(NciPARENT);
+    }
+
+    [[nodiscard]]
+    inline TreeNode getMember() const {
+        int nid = getMemberID();
+        if (nid == 0) {
+            throw TreeNodeNotFound();
+        }
+        return TreeNode(_tree, nid);
+    }
+
+    [[nodiscard]]
+    inline int getChildNID() const {
+        return _getNCI<uint32_t>(NciPARENT);
+    }
+
+    [[nodiscard]]
+    inline TreeNode getChild() const {
+        int nid = getChildNID();
+        if (nid == 0) {
+            throw TreeNodeNotFound();
+        }
+        return TreeNode(_tree, nid);
+    }
+
+    [[nodiscard]]
+    inline ncik_t getParentRelationship() const {
+        return _getNCI<ncik_t>(NciPARENT_RELATIONSHIP);
+    }
+
+    [[nodiscard]]
+    inline std::vector<int> getConglomerateElementNIDs() const {
+        return _getNIDArrayNCI(NciCONGLOMERATE_NIDS, NciNUMBER_OF_ELTS);
+    }
+
+    [[nodiscard]]
+    inline std::vector<TreeNode> getConglomerateElements() const {
+        return _getTreeNodeArrayNCI(NciCONGLOMERATE_NIDS, NciNUMBER_OF_ELTS);
+    }
+
+    [[nodiscard]]
+    inline std::string getOriginalPartName() const {
+        return _getStringNCI(NciORIGINAL_PART_NAME, 1024);
+    }
+
+    [[nodiscard]]
+    inline uint32_t getNumberOfMembers() const {
+        return _getNCI<uint32_t>(NciNUMBER_OF_MEMBERS);
+    }
+
+    [[nodiscard]]
+    inline uint32_t getNumberOfChildren() const {
+        return _getNCI<uint32_t>(NciNUMBER_OF_CHILDREN);
+    }
+
+    [[nodiscard]]
+    inline std::vector<int> getMemberNIDs() const {
+        return _getNIDArrayNCI(NciMEMBER_NIDS, NciNUMBER_OF_MEMBERS);
+    }
+
+    [[nodiscard]]
+    inline std::vector<TreeNode> getMembers() const {
+        return _getTreeNodeArrayNCI(NciMEMBER_NIDS, NciNUMBER_OF_MEMBERS);
+    }
+
+    [[nodiscard]]
+    inline std::vector<int> getChildrenNIDs() const {
+        return _getNIDArrayNCI(NciCHILDREN_NIDS, NciNUMBER_OF_CHILDREN);
+    }
+
+    [[nodiscard]]
+    inline std::vector<TreeNode> getChildren() const {
+        return _getTreeNodeArrayNCI(NciCHILDREN_NIDS, NciNUMBER_OF_CHILDREN);
+    }
+
+    [[nodiscard]]
+    std::vector<TreeNode> getMembersAndChildren(bool sortedNIDs = true) const;
+
+    [[nodiscard]]
+    inline std::string getFullPath() const {
+        return _getStringNCI(NciFULLPATH, 1024);
+    }
+
+    [[nodiscard]]
+    inline std::string getMinPath() const {
+        return _getStringNCI(NciMINPATH, 1024);
+    }
+
+    [[nodiscard]]
+    inline usage_t getUsage() const {
+        return _getNCI<usage_t>(NciUSAGE);
+    }
+
+    // setUsage
+
+    [[nodiscard]]
+    inline std::string getParentTreeName() const {
+        return _getStringNCI(NciPARENT_TREE, 64);
+    }
+
+    [[nodiscard]]
+    inline uint32_t getRecordLength() const {
+        return _getNCI<uint32_t>(NciRLENGTH);
+    }
+
+    [[nodiscard]]
+    inline uint32_t getNumberOfElements() const {
+        return _getNCI<uint32_t>(NciNUMBER_OF_ELTS);
+    }
+
+    [[nodiscard]]
+    inline bool hasDataInNCI() const {
+        return _getNCI<bool>(NciDATA_IN_NCI);
+    }
+
+    [[nodiscard]]
+    inline bool hasErrorOnPut() const {
+        return _getNCI<bool>(NciERROR_ON_PUT);
+    }
+
+    [[nodiscard]]
+    inline uint64_t getRFA() const {
+        return _getNCI<uint64_t>(NciRFA);
+    }
+
+    [[nodiscard]]
+    inline uint32_t getIOStatus() const {
+        return _getNCI<uint32_t>(NciIO_STATUS);
+    }
+
+    [[nodiscard]]
+    inline uint32_t getIOSTV() const {
+        return _getNCI<uint32_t>(NciIO_STV);
+    }
+
+    [[nodiscard]]
+    inline std::string getDTypeString() const {
+        return _getStringNCI(NciDTYPE_STR, 64);
+    }
+
+    [[nodiscard]]
+    inline std::string getUsageString() const {
+        return _getStringNCI(NciUSAGE_STR, 64);
+    }
+
+    [[nodiscard]]
+    inline std::string getClassString() const {
+        return _getStringNCI(NciCLASS_STR, 64);
+    }
+
+    [[nodiscard]]
+    inline uint32_t getVersion() const {
+        return _getNCI<uint32_t>(NciVERSION);
+    }
+
+    [[nodiscard]]
+    inline uint8_t getCompressionMethod() const {
+        return _getNCI<uint8_t>(NciCOMPRESSION_METHOD);
+    }
+
+    // setCompressionMethod?
+
+    [[nodiscard]]
+    inline std::string getCompressionMethodString() const {
+        return _getStringNCI(NciCOMPRESSION_METHOD_STR, 64);
+    }
+
+    // setCompressionMethodString?
+
+    template <typename ValueType>
+    void setExtendedAttribute(const std::string& name, ValueType value) const;
+
+    template <typename ResultType = Data>
+    ResultType getExtendedAttribute(const std::string& name);
+
+    virtual std::vector<std::string> getTags() const;
+
+    [[nodiscard]]
+    Data getRecord() const;
+
+    void putRecord(const Data& data) const;
+
+    template <typename DataType = Data>
+    [[nodiscard]]
+    DataType getData() const;
+
+    template <typename DataType = Data, typename UnitsType = Data>
+    [[nodiscard]]
+    std::tuple<DataType, UnitsType> getDataWithUnits() const;
+
+    template <typename DataType>
+    inline void setData(DataType value) const {
+        putRecord(Data::FromScalar(value));
+    }
+
+    template <typename DataType, typename UnitsType>
+    inline void setDataWithUnits(DataType value, UnitsType units) const {
+        putRecord(WithUnits(Data::FromScalar(value), Data::FromScalar(units)));
+    }
+
+#ifdef __cpp_lib_span
+
+    template <typename DataType>
+    void setArrayData(const std::span<const DataType> values, const std::vector<uint32_t>& dims = {}) const {
+        if (dims.empty()) {
+            return setArrayData(values.data(), { values.size() });
+        }
+        return setArrayData(values.data(), dims);
+    }
+
+    template <typename DataType, typename UnitsType>
+    void setArrayDataWithUnits(const std::span<const DataType> values, UnitsType units, const std::vector<uint32_t>& dims = {}) const {
+        if (dims.empty()) {
+            return setArrayDataWithUnits(values.data(), units, { values.size() });
+        }
+        return setArrayDataWithUnits(values.data(), units, dims);
+    }
+
+#endif
+
+    template <typename DataType>
+    inline void setArrayData(std::vector<DataType>& values, const std::vector<uint32_t>& dims = {}) const {
+        if (dims.empty()) {
+            return setArrayData(values.data(), { values.size() });
+        }
+        return setArrayData(values.data(), dims);
+    }
+
+    template <typename DataType, typename UnitsType>
+    inline void setArrayDataWithUnits(const std::vector<DataType>& values, UnitsType units, const std::vector<uint32_t>& dims = {}) const {
+        if (dims.empty()) {
+            return setArrayDataWithUnits(values.data(), units, { values.size() });
+        }
+        return setArrayDataWithUnits(values.data(), units, dims);
+    }
+
+    template <typename DataType>
+    inline void setArrayData(const DataType * values, const std::vector<uint32_t>& dims) const {
+        putRecord(Data::FromArray(values, dims));
+    }
+
+    template <typename DataType, typename UnitsType>
+    inline void setArrayDataWithUnits(const DataType * values, UnitsType units, const std::vector<uint32_t>& dims) const {
+        putRecord(WithUnits(Data::FromArray(values, dims), Data::FromScalar(units)));
+    }
+
+    template <typename ValueType>
+    void putRow(int segmentLength, ValueType value, int64_t timestamp);
+
+    template <typename ValueArrayType>
+    void putSegment(ValueArrayType values, int index = -1);
+
+    template <typename ValueArrayType>
+    inline void putTimestampedSegment(std::vector<int64_t> timestamps, ValueArrayType values) {
+        putTimestampedSegment(timestamps.data(), values);
+    }
+
+    template <typename ValueArrayType>
+    void putTimestampedSegment(int64_t * timestamps, ValueArrayType values);
+
+    template <
+        typename StartIndexType,
+        typename EndIndexType,
+        typename DimensionType,
+        typename ValueArrayType
+    >
+    void makeSegment(
+        StartIndexType startIndex,
+        EndIndexType endIndex,
+        DimensionType dimension,
+        ValueArrayType values,
+        int index = -1,
+        int rowsFilled = -1
+    ) const;
+
+    template <
+        typename StartIndexType,
+        typename EndIndexType,
+        typename DimensionType,
+        typename ValueArrayType
+    >
+    void makeSegmentResampled(
+        StartIndexType startIndex,
+        EndIndexType endIndex,
+        DimensionType dimension,
+        ValueArrayType values,
+        const TreeNode& resampleNode,
+        int resampleFactor,
+        int index = -1,
+        int rowsFilled = -1
+    ) const;
+
+    // template <typename StartIndexType, typename EndIndexType, typename DimensionType, typename ValueArrayType>
+    // void makeSegmentMinMax(
+    //     StartIndexType startIndex,
+    //     EndIndexType endIndex,
+    //     DimensionType dimension,
+    //     ValueArrayType values,
+    //     const TreeNode& resampleNode,
+    //     int resampleFactor,
+    //     int index = -1,
+    //     int rowsFilled = -1
+    // ) const;
+
+    // template <typename TimestampArrayType, typename ValueArrayType>
+    // inline void makeTimestampedSegment(
+    //     TimestampArrayType timestamps,
+    //     ValueArrayType values,
+    //     int index = -1,
+    //     int rowsFilled = -1
+    // ) const;
+
+    // template <typename ValueArrayType>
+    // inline void makeTimestampedSegment(
+    //     Int64Array timestamps,
+    //     ValueArrayType values,
+    //     int index = -1,
+    //     int rowsFilled = -1
+    // ) const;
+
+    template <typename ValueArrayType>
+    inline void makeTimestampedSegment(
+        std::vector<int64_t> timestamps,
+        ValueArrayType values,
+        int index = -1,
+        int rowsFilled = -1
+    ) const
+    {
+        makeTimestampedSegment(timestamps.data(), values, index, rowsFilled);
+    }
+
+    template <typename ValueArrayType>
+    void makeTimestampedSegment(
+        int64_t * timestamps,
+        ValueArrayType values,
+        int index = -1,
+        int rowsFilled = -1
+    ) const;
+
+    // TODO: Move
+    #ifdef __cpp_lib_optional
+
+        [[nodiscard]]
+        std::optional<TreeNode> tryGetNode(const std::string& path) const
+        {
+            int nid = 0;
+
+            int status = _TreeFindNodeRelative(getDBID(), path.data(), _nid, &nid);
+            if (status == TreeNNF) {
+                return std::nullopt;
+            }
+            else if (IS_NOT_OK(status)) {
+                throwException(status);
+            }
+
+            return TreeNode(_tree, nid);
+        }
+
+        [[nodiscard]]
+        inline std::optional<TreeNode> tryGetParent() const
+        {
+            int nid = getParentNID();
+            if (nid == 0) {
+                return std::nullopt;
+            }
+            return TreeNode(_tree, nid);
+        }
+
+        [[nodiscard]]
+        inline std::optional<TreeNode> tryGetBrother() const
+        {
+            int nid = getBrotherNID();
+            if (nid == 0) {
+                return std::nullopt;
+            }
+            return TreeNode(_tree, nid);
+        }
+
+        [[nodiscard]]
+        inline std::optional<TreeNode> tryGetMember() const
+        {
+            int nid = getMemberID();
+            if (nid == 0) {
+                return std::nullopt;
+            }
+            return TreeNode(_tree, nid);
+        }
+
+        [[nodiscard]]
+        inline std::optional<TreeNode> tryGetChild() const
+        {
+            int nid = getChildNID();
+            if (nid == 0) {
+                return std::nullopt;
+            }
+            return TreeNode(_tree, nid);
+        }
+
+        [[nodiscard]]
+        std::optional<Data> tryGetData() const
+        {
+            mdsdsc_xd_t xd = MDSDSC_XD_INITIALIZER;
+            int status = _TreeGetRecord(getDBID(), _nid, &xd);
+            if (status == TreeNODATA) {
+                return std::nullopt;
+            }
+            else if (IS_NOT_OK(status)) {
+                throwException(status);
+            }
+
+            return Data(std::move(xd));
+        }
+
+    #endif
+
+protected:
+
+    Tree * _tree = nullptr;
+
+    int _nid = -1;
+
+    template <typename ResultType>
+    ResultType _getNCI(nci_t code) const;
+
+    std::string _getStringNCI(nci_t code, int16_t size) const;
+
+    std::vector<int> _getNIDArrayNCI(nci_t code, nci_t codeForNumberOf) const;
+
+    std::vector<TreeNode> _getTreeNodeArrayNCI(nci_t code, nci_t codeForNumberOf) const;
+
+}; // class TreeNode
+
+std::string to_string(const TreeNode * node);
+
+inline std::string to_string(const TreeNode& node) {
+    return to_string(&node);
+}
+
+enum class Mode
+{
+    Normal,
+    ReadOnly,
+    Edit,
+    New,
+
+    // TODO: Rename
+    View,
+};
+
+std::string to_string(const Mode& mode);
+
+class Tree : public TreeNode
+{
+public:
+
+    static Tree GetActive() {
+        char name[64];
+        int shot;
+        int retNameLength;
+
+        DBI_ITM itmList[] = {
+            { sizeof(name), DbiNAME, name, &retNameLength, },
+            { sizeof(shot), DbiSHOTID, &shot, nullptr, },
+            { 0, DbiEND_OF_LIST, nullptr, nullptr, },
+        };
+        int status = TreeGetDbi(itmList);
+        if (IS_NOT_OK(status)) {
+            throwException(status);
+        }
+
+        return Tree(std::string(name, retNameLength), shot, TreeDbid());
+    }
+
+    inline void setActive() {
+        TreeSwitchDbid(getDBID());
+    }
+
+    Tree();
+
+    Tree(const std::string& treename, int shot, Mode mode = Mode::Normal)
+        : _treename(treename)
+        , _shot(shot)
+        , _mode(mode)
+    {
+        open();
+    }
+
+    Tree(const std::string& treename, int shot, void * dbid)
+        : _treename(treename)
+        , _shot(shot)
+        , _mode(Mode::View)
+        , _dbid(dbid)
+    { }
+
+    inline ~Tree()
+    {
+        if (_mode != Mode::View) {
+            TreeFreeDbid(_dbid);
+            _dbid = nullptr;
+        }
+    }
+
+    [[nodiscard]]
+    inline void * getDBID() const {
+        return _dbid;
+    }
+
+    [[nodiscard]]
+    inline void ** getContext() const {
+        return const_cast<void **>(&_dbid);
+    }
+
+    [[nodiscard]]
+    inline std::string getTreeName() const {
+        // Return _treename?
+        return _getStringDBI(DbiNAME, 64);
+    }
+
+    [[nodiscard]]
+    inline int getShot() const {
+        // Return _shot?
+        return _getDBI<int>(DbiSHOTID);
+    }
+
+    [[nodiscard]]
+    inline Mode getMode() const {
+        return _mode;
+    }
+
+    inline void open(const std::string& treename, int shot, Mode mode = Mode::Normal)
+    {
+        _treename = treename;
+        _shot = shot;
+        _mode = mode;
+
+        return open();
+    }
+
+    void open();
+
+    inline void reopen() { open(); }
+
+    void close();
+
+    void write();
+
+    std::vector<std::string> findTagWild(const std::string& wildcard) const;
+
+    inline std::vector<std::string> getTags() const override {
+        return findTagWild("*");
+    }
+
+    bool isOpen() const {
+        return _open;
+    }
+
+    bool isOpenForEdit() const {
+        return _getDBI<int>(DbiOPEN_FOR_EDIT);
+    }
+
+    bool isModified() const {
+        return _getDBI<int>(DbiMODIFIED);
+    }
+
+    bool isOpenReadOnly() const {
+        return _getDBI<int>(DbiOPEN_READONLY);
+    }
+
+    void setReadOnly() {
+        if (_open) {
+            _setDBI(DbiREADONLY, true);
+
+            if (_mode != Mode::View) {
+                _mode = Mode::ReadOnly;
+            }
+        }
+    }
+
+    bool isVersionsInModelEnabled() const {
+        return _getDBI<int>(DbiVERSIONS_IN_MODEL);
+    }
+
+    void setVersionsInModelEnabled(bool enabled) const {
+        _setDBI(DbiVERSIONS_IN_MODEL, enabled);
+    }
+
+    bool isVersionsInPulseEnabled() const {
+        return _getDBI<int>(DbiVERSIONS_IN_PULSE);
+    }
+
+    void setVersionsInPulseEnabled(bool enabled) const {
+        _setDBI(DbiVERSIONS_IN_PULSE, enabled);
+    }
+
+    bool isAlternateCompressionEnabled() const {
+        return _getDBI<int>(DbiALTERNATE_COMPRESSION);
+    }
+
+    void setAlternateCompressionEnabled(bool enabled) const {
+        _setDBI(DbiALTERNATE_COMPRESSION, enabled);
+    }
+
+    inline void setDefaultNode(const std::string& path) const {
+        setDefaultNode(getNode(path));
+    }
+
+    void setDefaultNode(const TreeNode& node) const;
+
+    TreeNode getDefaultNode() const;
+
+    template <typename ResultType = Data, typename ...ArgTypes>
+    ResultType compileData(const std::string& expression, ArgTypes... args) const;
+
+    template <typename ResultType = Data, typename ...ArgTypes>
+    ResultType executeData(const std::string& expression, ArgTypes... args) const;
+
+private:
+
+    void * _dbid = nullptr;
+
+    bool _open = false;
+
+    std::string _treename;
+
+    int _shot;
+
+    Mode _mode = Mode::Normal;
+
+    template <typename ResultType>
+    ResultType _getDBI(int16_t code) const;
+
+    std::string _getStringDBI(int16_t code, int16_t size) const;
+
+    void _setDBI(int16_t code, int value) const;
+
+};
+
+std::string to_string(const Tree * tree);
+
+inline std::string to_string(const Tree& tree) {
+    return to_string(&tree);
+}
+
 template <typename T>
 struct is_std_vector : std::false_type { };
 
@@ -3598,7 +4431,15 @@ public:
     DataView& operator=(const DataView&) = default;
 
     inline mdsdsc_t * getDescriptor() const {
+        if (_dsc.dtype == DTYPE_MISSING && _dsc.class_ == CLASS_MISSING) {
+            return nullptr;
+        }
+
         return (mdsdsc_t *)&_dsc;
+    }
+
+    inline Tree * getTree() const {
+        return _tree;
     }
 
     inline DataView(std::nullptr_t)
@@ -3621,6 +4462,7 @@ public:
             .class_ = CLASS_S,
             .pointer = (char *)value.getDescriptor(),
         })
+        , _tree(value.getTree())
     { }
 
     template <typename CType,
@@ -3716,9 +4558,21 @@ public:
 
     #endif // __cpp_lib_string_view
 
+    inline DataView(const TreeNode& node)
+        : _dsc(mdsdsc_a_t{
+            .length = sizeof(node._nid),
+            .dtype = DTYPE_NID,
+            .class_ = CLASS_S,
+            .pointer = const_cast<char *>(reinterpret_cast<const char *>(&node._nid)),
+        })
+        , _tree(node._tree)
+    { }
+
 private:
 
     mdsdsc_a_t _dsc = MDSDSC_XD_INITIALIZER;
+
+    Tree * _tree = nullptr;
 
     template <typename CType>
     inline dtype_t _getDTypeForCType()
@@ -4133,106 +4987,477 @@ protected:
 
 };
 
-#define _MDSPLUS_SCALAR_BOOTSTRAP(ScalarType, CType, DataType)  \
-                                                                \
-    typedef CType __ctype;                                      \
-    static constexpr DType __dtype = DataType;                  \
-                                                                \
-    ScalarType() = default;                                     \
-                                                                \
-    ScalarType(ScalarType&&) = default;                         \
-    ScalarType& operator=(ScalarType&&) = default;              \
-                                                                \
-    inline ScalarType(mdsdsc_xd_t && xd, Tree * tree = nullptr) \
-        : Scalar(std::move(xd), tree)                           \
-    { }                                                         \
-                                                                \
-    /** Construct a Scalar from a value **/                     \
-    inline ScalarType(__ctype value)                            \
-        : Scalar(__dtype, value)                                \
-    { }                                                         \
-                                                                \
-    inline const char * getClassName() const override {         \
-        return #ScalarType;                                     \
-    }                                                           \
-                                                                \
-    [[nodiscard]]                                               \
-    inline ScalarType clone() const {                           \
-        return _clone<ScalarType>();                            \
-    }                                                           \
-                                                                \
-    [[nodiscard]]                                               \
-    inline __ctype getValue() const {                           \
-        return _getValue<__ctype>();                            \
-    }                                                           \
-                                                                \
-    inline void setValue(__ctype value) {                       \
-        _setValue<__ctype>(__dtype, value);                     \
-    }
-
 class Int8 : public Scalar
 {
 public:
 
-    _MDSPLUS_SCALAR_BOOTSTRAP(Int8, int8_t, DType::B)
+    typedef int8_t __ctype;
+    static constexpr DType __dtype = DType::B;
+
+    Int8() = default;
+
+    Int8(Int8&&) = default;
+    Int8& operator=(Int8&&) = default;
+
+    inline Int8(mdsdsc_xd_t && xd, Tree * tree = nullptr)
+        : Scalar(std::move(xd), tree)
+    { }
+
+    /** Construct a Scalar from a value **/
+    inline Int8(__ctype value)
+        : Scalar(__dtype, value)
+    { }
+
+    inline const char * getClassName() const override {
+        return "Int8";
+    }
+
+    [[nodiscard]]
+    inline Int8 clone() const {
+        return _clone<Int8>();
+    }
+
+    [[nodiscard]]
+    inline __ctype getValue() const {
+        return _getValue<__ctype>();
+    }
+
+    inline void setValue(__ctype value) {
+        _setValue<__ctype>(__dtype, value);
+    }
 
 }; // class Int8
+
+template <>
+struct is_valid_ctype<Int8::__ctype> : std::true_type { };
+
+template <>
+inline Int8 Data::releaseAndConvert() {
+    return _convertToScalar<Int8>();
+}
+
+template <>
+inline Int8::__ctype Data::getData() const {
+    return getData<Int8>().getValue();
+}
+
+template <>
+inline Data Data::FromScalar(Int8::__ctype value) {
+    return Int8(value);
+}
 
 class UInt8 : public Scalar
 {
 public:
 
-    _MDSPLUS_SCALAR_BOOTSTRAP(UInt8, uint8_t, DType::BU)
+    typedef uint8_t __ctype;
+    static constexpr DType __dtype = DType::BU;
+
+    UInt8() = default;
+
+    UInt8(UInt8&&) = default;
+    UInt8& operator=(UInt8&&) = default;
+
+    inline UInt8(mdsdsc_xd_t && xd, Tree * tree = nullptr)
+        : Scalar(std::move(xd), tree)
+    { }
+
+    /** Construct a Scalar from a value **/
+    inline UInt8(__ctype value)
+        : Scalar(__dtype, value)
+    { }
+
+    inline const char * getClassName() const override {
+        return "UInt8";
+    }
+
+    [[nodiscard]]
+    inline UInt8 clone() const {
+        return _clone<UInt8>();
+    }
+
+    [[nodiscard]]
+    inline __ctype getValue() const {
+        return _getValue<__ctype>();
+    }
+
+    inline void setValue(__ctype value) {
+        _setValue<__ctype>(__dtype, value);
+    }
 
 }; // class UInt8
+
+template <>
+struct is_valid_ctype<UInt8::__ctype> : std::true_type { };
+
+template <>
+inline UInt8 Data::releaseAndConvert() {
+    return _convertToScalar<UInt8>();
+}
+
+template <>
+inline UInt8::__ctype Data::getData() const {
+    return getData<UInt8>().getValue();
+}
+
+template <>
+inline Data Data::FromScalar(UInt8::__ctype value) {
+    return UInt8(value);
+}
 
 class Int16 : public Scalar
 {
 public:
 
-    _MDSPLUS_SCALAR_BOOTSTRAP(Int16, int16_t, DType::W)
+    typedef int16_t __ctype;
+    static constexpr DType __dtype = DType::W;
+
+    Int16() = default;
+
+    Int16(Int16&&) = default;
+    Int16& operator=(Int16&&) = default;
+
+    inline Int16(mdsdsc_xd_t && xd, Tree * tree = nullptr)
+        : Scalar(std::move(xd), tree)
+    { }
+
+    /** Construct a Scalar from a value **/
+    inline Int16(__ctype value)
+        : Scalar(__dtype, value)
+    { }
+
+    inline const char * getClassName() const override {
+        return "Int16";
+    }
+
+    [[nodiscard]]
+    inline Int16 clone() const {
+        return _clone<Int16>();
+    }
+
+    [[nodiscard]]
+    inline __ctype getValue() const {
+        return _getValue<__ctype>();
+    }
+
+    inline void setValue(__ctype value) {
+        _setValue<__ctype>(__dtype, value);
+    }
 
 }; // class Int16
+
+template <>
+struct is_valid_ctype<Int16::__ctype> : std::true_type { };
+
+template <>
+inline Int16 Data::releaseAndConvert() {
+    return _convertToScalar<Int16>();
+}
+
+template <>
+inline Int16::__ctype Data::getData() const {
+    return getData<Int16>().getValue();
+}
+
+template <>
+inline Data Data::FromScalar(Int16::__ctype value) {
+    return Int16(value);
+}
 
 class UInt16 : public Scalar
 {
 public:
 
-    _MDSPLUS_SCALAR_BOOTSTRAP(UInt16, uint16_t, DType::WU)
+    typedef uint16_t __ctype;
+    static constexpr DType __dtype = DType::WU;
+
+    UInt16() = default;
+
+    UInt16(UInt16&&) = default;
+    UInt16& operator=(UInt16&&) = default;
+
+    inline UInt16(mdsdsc_xd_t && xd, Tree * tree = nullptr)
+        : Scalar(std::move(xd), tree)
+    { }
+
+    /** Construct a Scalar from a value **/
+    inline UInt16(__ctype value)
+        : Scalar(__dtype, value)
+    { }
+
+    inline const char * getClassName() const override {
+        return "UInt16";
+    }
+
+    [[nodiscard]]
+    inline UInt16 clone() const {
+        return _clone<UInt16>();
+    }
+
+    [[nodiscard]]
+    inline __ctype getValue() const {
+        return _getValue<__ctype>();
+    }
+
+    inline void setValue(__ctype value) {
+        _setValue<__ctype>(__dtype, value);
+    }
 
 }; // class UInt16
+
+template <>
+struct is_valid_ctype<UInt16::__ctype> : std::true_type { };
+
+template <>
+inline UInt16 Data::releaseAndConvert() {
+    return _convertToScalar<UInt16>();
+}
+
+template <>
+inline UInt16::__ctype Data::getData() const {
+    return getData<UInt16>().getValue();
+}
+
+template <>
+inline Data Data::FromScalar(UInt16::__ctype value) {
+    return UInt16(value);
+}
 
 class Int32 : public Scalar
 {
 public:
 
-    _MDSPLUS_SCALAR_BOOTSTRAP(Int32, int32_t, DType::L)
+    typedef int32_t __ctype;
+    static constexpr DType __dtype = DType::L;
+
+    Int32() = default;
+
+    Int32(Int32&&) = default;
+    Int32& operator=(Int32&&) = default;
+
+    inline Int32(mdsdsc_xd_t && xd, Tree * tree = nullptr)
+        : Scalar(std::move(xd), tree)
+    { }
+
+    /** Construct a Scalar from a value **/
+    inline Int32(__ctype value)
+        : Scalar(__dtype, value)
+    { }
+
+    inline const char * getClassName() const override {
+        return "Int32";
+    }
+
+    [[nodiscard]]
+    inline Int32 clone() const {
+        return _clone<Int32>();
+    }
+
+    [[nodiscard]]
+    inline __ctype getValue() const {
+        return _getValue<__ctype>();
+    }
+
+    inline void setValue(__ctype value) {
+        _setValue<__ctype>(__dtype, value);
+    }
 
 }; // class Int32
+
+template <>
+struct is_valid_ctype<Int32::__ctype> : std::true_type { };
+
+template <>
+inline Int32 Data::releaseAndConvert() {
+    return _convertToScalar<Int32>();
+}
+
+template <>
+inline Int32::__ctype Data::getData() const {
+    return getData<Int32>().getValue();
+}
+
+template <>
+inline Data Data::FromScalar(Int32::__ctype value) {
+    return Int32(value);
+}
 
 class UInt32 : public Scalar
 {
 public:
 
-    _MDSPLUS_SCALAR_BOOTSTRAP(UInt32, uint32_t, DType::LU)
+    typedef uint32_t __ctype;
+    static constexpr DType __dtype = DType::LU;
+
+    UInt32() = default;
+
+    UInt32(UInt32&&) = default;
+    UInt32& operator=(UInt32&&) = default;
+
+    inline UInt32(mdsdsc_xd_t && xd, Tree * tree = nullptr)
+        : Scalar(std::move(xd), tree)
+    { }
+
+    /** Construct a Scalar from a value **/
+    inline UInt32(__ctype value)
+        : Scalar(__dtype, value)
+    { }
+
+    inline const char * getClassName() const override {
+        return "UInt32";
+    }
+
+    [[nodiscard]]
+    inline UInt32 clone() const {
+        return _clone<UInt32>();
+    }
+
+    [[nodiscard]]
+    inline __ctype getValue() const {
+        return _getValue<__ctype>();
+    }
+
+    inline void setValue(__ctype value) {
+        _setValue<__ctype>(__dtype, value);
+    }
 
 }; // class UInt32
+
+template <>
+struct is_valid_ctype<UInt32::__ctype> : std::true_type { };
+
+template <>
+inline UInt32 Data::releaseAndConvert() {
+    return _convertToScalar<UInt32>();
+}
+
+template <>
+inline UInt32::__ctype Data::getData() const {
+    return getData<UInt32>().getValue();
+}
+
+template <>
+inline Data Data::FromScalar(UInt32::__ctype value) {
+    return UInt32(value);
+}
 
 class Int64 : public Scalar
 {
 public:
 
-    _MDSPLUS_SCALAR_BOOTSTRAP(Int64, int64_t, DType::Q)
+    typedef int64_t __ctype;
+    static constexpr DType __dtype = DType::Q;
+
+    Int64() = default;
+
+    Int64(Int64&&) = default;
+    Int64& operator=(Int64&&) = default;
+
+    inline Int64(mdsdsc_xd_t && xd, Tree * tree = nullptr)
+        : Scalar(std::move(xd), tree)
+    { }
+
+    /** Construct a Scalar from a value **/
+    inline Int64(__ctype value)
+        : Scalar(__dtype, value)
+    { }
+
+    inline const char * getClassName() const override {
+        return "Int64";
+    }
+
+    [[nodiscard]]
+    inline Int64 clone() const {
+        return _clone<Int64>();
+    }
+
+    [[nodiscard]]
+    inline __ctype getValue() const {
+        return _getValue<__ctype>();
+    }
+
+    inline void setValue(__ctype value) {
+        _setValue<__ctype>(__dtype, value);
+    }
 
 }; // class Int32
+
+template <>
+struct is_valid_ctype<Int64::__ctype> : std::true_type { };
+
+template <>
+inline Int64 Data::releaseAndConvert() {
+    return _convertToScalar<Int64>();
+}
+
+template <>
+inline Int64::__ctype Data::getData() const {
+    return getData<Int64>().getValue();
+}
+
+template <>
+inline Data Data::FromScalar(Int64::__ctype value) {
+    return Int64(value);
+}
 
 class UInt64 : public Scalar
 {
 public:
 
-    _MDSPLUS_SCALAR_BOOTSTRAP(UInt64, uint64_t, DType::QU)
+    typedef uint64_t __ctype;
+    static constexpr DType __dtype = DType::QU;
+
+    UInt64() = default;
+
+    UInt64(UInt64&&) = default;
+    UInt64& operator=(UInt64&&) = default;
+
+    inline UInt64(mdsdsc_xd_t && xd, Tree * tree = nullptr)
+        : Scalar(std::move(xd), tree)
+    { }
+
+    /** Construct a Scalar from a value **/
+    inline UInt64(__ctype value)
+        : Scalar(__dtype, value)
+    { }
+
+    inline const char * getClassName() const override {
+        return "UInt64";
+    }
+
+    [[nodiscard]]
+    inline UInt64 clone() const {
+        return _clone<UInt64>();
+    }
+
+    [[nodiscard]]
+    inline __ctype getValue() const {
+        return _getValue<__ctype>();
+    }
+
+    inline void setValue(__ctype value) {
+        _setValue<__ctype>(__dtype, value);
+    }
 
 }; // class UInt64
+
+template <>
+struct is_valid_ctype<UInt64::__ctype> : std::true_type { };
+
+template <>
+inline UInt64 Data::releaseAndConvert() {
+    return _convertToScalar<UInt64>();
+}
+
+template <>
+inline UInt64::__ctype Data::getData() const {
+    return getData<UInt64>().getValue();
+}
+
+template <>
+inline Data Data::FromScalar(UInt64::__ctype value) {
+    return UInt64(value);
+}
 
 // TODO: Int128 / UInt128 ?
 
@@ -4240,66 +5465,237 @@ class Float32 : public Scalar
 {
 public:
 
-    _MDSPLUS_SCALAR_BOOTSTRAP(Float32, float, DType::FS)
+    typedef float __ctype;
+    static constexpr DType __dtype = DType::FS;
+
+    Float32() = default;
+
+    Float32(Float32&&) = default;
+    Float32& operator=(Float32&&) = default;
+
+    inline Float32(mdsdsc_xd_t && xd, Tree * tree = nullptr)
+        : Scalar(std::move(xd), tree)
+    { }
+
+    /** Construct a Scalar from a value **/
+    inline Float32(__ctype value)
+        : Scalar(__dtype, value)
+    { }
+
+    inline const char * getClassName() const override {
+        return "Float32";
+    }
+
+    [[nodiscard]]
+    inline Float32 clone() const {
+        return _clone<Float32>();
+    }
+
+    [[nodiscard]]
+    inline __ctype getValue() const {
+        return _getValue<__ctype>();
+    }
+
+    inline void setValue(__ctype value) {
+        _setValue<__ctype>(__dtype, value);
+    }
 
 }; // class Float32
+
+template <>
+struct is_valid_ctype<Float32::__ctype> : std::true_type { };
+
+template <>
+inline Float32 Data::releaseAndConvert() {
+    return _convertToScalar<Float32>();
+}
+
+template <>
+inline Float32::__ctype Data::getData() const {
+    return getData<Float32>().getValue();
+}
+
+template <>
+inline Data Data::FromScalar(Float32::__ctype value) {
+    return Float32(value);
+}
 
 class Float64 : public Scalar
 {
 public:
 
-    _MDSPLUS_SCALAR_BOOTSTRAP(Float64, double, DType::FT)
+    typedef double __ctype;
+    static constexpr DType __dtype = DType::FT;
+
+    Float64() = default;
+
+    Float64(Float64&&) = default;
+    Float64& operator=(Float64&&) = default;
+
+    inline Float64(mdsdsc_xd_t && xd, Tree * tree = nullptr)
+        : Scalar(std::move(xd), tree)
+    { }
+
+    /** Construct a Scalar from a value **/
+    inline Float64(__ctype value)
+        : Scalar(__dtype, value)
+    { }
+
+    inline const char * getClassName() const override {
+        return "Float64";
+    }
+
+    [[nodiscard]]
+    inline Float64 clone() const {
+        return _clone<Float64>();
+    }
+
+    [[nodiscard]]
+    inline __ctype getValue() const {
+        return _getValue<__ctype>();
+    }
+
+    inline void setValue(__ctype value) {
+        _setValue<__ctype>(__dtype, value);
+    }
 
 }; // class Float64
+
+template <>
+struct is_valid_ctype<Float64::__ctype> : std::true_type { };
+
+template <>
+inline Float64 Data::releaseAndConvert() {
+    return _convertToScalar<Float64>();
+}
+
+template <>
+inline Float64::__ctype Data::getData() const {
+    return getData<Float64>().getValue();
+}
+
+template <>
+inline Data Data::FromScalar(Float64::__ctype value) {
+    return Float64(value);
+}
 
 class Complex32 : public Scalar
 {
 public:
 
-    _MDSPLUS_SCALAR_BOOTSTRAP(Complex32, std::complex<float>, DType::FSC)
+    typedef std::complex<float> __ctype;
+    static constexpr DType __dtype = DType::FSC;
+
+    Complex32() = default;
+
+    Complex32(Complex32&&) = default;
+    Complex32& operator=(Complex32&&) = default;
+
+    inline Complex32(mdsdsc_xd_t && xd, Tree * tree = nullptr)
+        : Scalar(std::move(xd), tree)
+    { }
+
+    /** Construct a Scalar from a value **/
+    inline Complex32(__ctype value)
+        : Scalar(__dtype, value)
+    { }
+
+    inline const char * getClassName() const override {
+        return "Complex32";
+    }
+
+    [[nodiscard]]
+    inline Complex32 clone() const {
+        return _clone<Complex32>();
+    }
+
+    [[nodiscard]]
+    inline __ctype getValue() const {
+        return _getValue<__ctype>();
+    }
+
+    inline void setValue(__ctype value) {
+        _setValue<__ctype>(__dtype, value);
+    }
 
 }; // class Complex32
+
+template <>
+struct is_valid_ctype<Complex32::__ctype> : std::true_type { };
+
+template <>
+inline Complex32 Data::releaseAndConvert() {
+    return _convertToScalar<Complex32>();
+}
+
+template <>
+inline Complex32::__ctype Data::getData() const {
+    return getData<Complex32>().getValue();
+}
+
+template <>
+inline Data Data::FromScalar(Complex32::__ctype value) {
+    return Complex32(value);
+}
 
 class Complex64 : public Scalar
 {
 public:
 
-    _MDSPLUS_SCALAR_BOOTSTRAP(Complex64, std::complex<double>, DType::FTC)
+    typedef std::complex<double> __ctype;
+    static constexpr DType __dtype = DType::FTC;
+
+    Complex64() = default;
+
+    Complex64(Complex64&&) = default;
+    Complex64& operator=(Complex64&&) = default;
+
+    inline Complex64(mdsdsc_xd_t && xd, Tree * tree = nullptr)
+        : Scalar(std::move(xd), tree)
+    { }
+
+    /** Construct a Scalar from a value **/
+    inline Complex64(__ctype value)
+        : Scalar(__dtype, value)
+    { }
+
+    inline const char * getClassName() const override {
+        return "Complex64";
+    }
+
+    [[nodiscard]]
+    inline Complex64 clone() const {
+        return _clone<Complex64>();
+    }
+
+    [[nodiscard]]
+    inline __ctype getValue() const {
+        return _getValue<__ctype>();
+    }
+
+    inline void setValue(__ctype value) {
+        _setValue<__ctype>(__dtype, value);
+    }
 
 }; // class Complex64
 
-#define _MDSPLUS_SCALAR_CUSTOMIZATION(ScalarType)                    \
-                                                                     \
-    template <>                                                      \
-    struct is_valid_ctype<ScalarType::__ctype> : std::true_type { }; \
-                                                                     \
-    template <>                                                      \
-    inline ScalarType Data::releaseAndConvert() {                    \
-        return _convertToScalar<ScalarType>();                       \
-    }                                                                \
-                                                                     \
-    template <>                                                      \
-    inline ScalarType::__ctype Data::getData() const {               \
-        return getData<ScalarType>().getValue();                     \
-    }                                                                \
-                                                                     \
-    template <>                                                      \
-    inline Data Data::FromScalar(ScalarType::__ctype value) {        \
-        return ScalarType(value);                                    \
-    }
+template <>
+struct is_valid_ctype<Complex64::__ctype> : std::true_type { };
 
-_MDSPLUS_SCALAR_CUSTOMIZATION(Int8)
-_MDSPLUS_SCALAR_CUSTOMIZATION(Int16)
-_MDSPLUS_SCALAR_CUSTOMIZATION(Int32)
-_MDSPLUS_SCALAR_CUSTOMIZATION(Int64)
-_MDSPLUS_SCALAR_CUSTOMIZATION(UInt8)
-_MDSPLUS_SCALAR_CUSTOMIZATION(UInt16)
-_MDSPLUS_SCALAR_CUSTOMIZATION(UInt32)
-_MDSPLUS_SCALAR_CUSTOMIZATION(UInt64)
-_MDSPLUS_SCALAR_CUSTOMIZATION(Float32)
-_MDSPLUS_SCALAR_CUSTOMIZATION(Float64)
-_MDSPLUS_SCALAR_CUSTOMIZATION(Complex32)
-_MDSPLUS_SCALAR_CUSTOMIZATION(Complex64)
+template <>
+inline Complex64 Data::releaseAndConvert() {
+    return _convertToScalar<Complex64>();
+}
+
+template <>
+inline Complex64::__ctype Data::getData() const {
+    return getData<Complex64>().getValue();
+}
+
+template <>
+inline Data Data::FromScalar(Complex64::__ctype value) {
+    return Complex64(value);
+}
 
 class Array : public Data
 {
@@ -4423,144 +5819,140 @@ protected:
 
 #ifdef __cpp_lib_span
 
-    #define _MDSPLUS_ARRAY_BOOTSTRAP_STD(ArrayType)                \
-                                                                   \
-        inline ArrayType(                                          \
-            std::span<const __ctype> values,                       \
-            const std::vector<uint32_t>& dims = {}                 \
-        )                                                          \
-            : Array(__dtype, values, dims)                         \
-        { }                                                        \
-                                                                   \
-        inline void setValues(                                     \
-            std::span<const __ctype> values,                       \
-            const std::vector<uint32_t>& dims = {}                 \
-        ) {                                                        \
-            _setValues<__ctype>(__dtype, values, dims);            \
-        }                                                          \
-                                                                   \
-        inline ArrayType(                                          \
-            const std::vector<__ctype> &values,                    \
-            const std::vector<uint32_t> &dims = {}                 \
-        )                                                          \
-            : Array(__dtype, std::span(values), dims)              \
-        { }                                                        \
-                                                                   \
-        inline void setValues(                                     \
-            const std::vector<__ctype> &values,                    \
-            const std::vector<uint32_t> &dims = {}                 \
-        ) {                                                        \
-            _setValues<__ctype>(__dtype, std::span(values), dims); \
-        }                                                          \
-                                                                   \
-        inline std::span<__ctype> getSpan() const {                \
-            return _getSpan<__ctype>();                            \
-        }
-
 #else
 
-    #define _MDSPLUS_ARRAY_BOOTSTRAP_STD(ArrayType) \
-                                                    \
-        inline ArrayType(                           \
-            const std::vector<__ctype> &values,     \
-            const std::vector<uint32_t> &dims = {}  \
-        )                                           \
-            : Array(__dtype, values, dims)          \
-        { }                                         \
-                                                    \
-        inline void setValues(                      \
-            const std::vector<__ctype> &values,     \
-            const std::vector<uint32_t> &dims = {}  \
-        ) {                                         \
-            _setValues(__dtype, values, dims);      \
-        }
-
 #endif // __cpp_lib_span
-
-#define _MDSPLUS_ARRAY_BOOTSTRAP(ArrayType, CType, DataType)                       \
-                                                                                   \
-    typedef CType __ctype;                                                         \
-    static constexpr DType __dtype = DataType;                                     \
-                                                                                   \
-    ArrayType() = default;                                                         \
-                                                                                   \
-    ArrayType(ArrayType &&) = default;                                             \
-    ArrayType &operator=(ArrayType &&) = default;                                  \
-                                                                                   \
-    inline ArrayType(mdsdsc_xd_t &&xd, Tree *tree = nullptr)                       \
-        : Array(std::move(xd), tree)                                               \
-    { }                                                                            \
-                                                                                   \
-    inline ArrayType(                                                              \
-        std::initializer_list<__ctype> values,                                     \
-        const std::vector<uint32_t> &dims = {}                                     \
-    )                                                                              \
-        : Array(__dtype, std::vector<__ctype>(values.begin(), values.end()), dims) \
-    { }                                                                            \
-                                                                                   \
-    inline const char * getClassName() const override {                            \
-        return #ArrayType;                                                         \
-    }                                                                              \
-                                                                                   \
-    [[nodiscard]]                                                                  \
-    inline ArrayType clone() const {                                               \
-        return _clone<ArrayType>();                                                \
-    }                                                                              \
-                                                                                   \
-    [[nodiscard]]                                                                  \
-    inline std::vector<__ctype> getVector() const {                                \
-        return _getVector<__ctype>();                                              \
-    }                                                                              \
-                                                                                   \
-    [[nodiscard]]                                                                  \
-    inline std::vector<__ctype> getValues() const {                                \
-        return getVector();                                                        \
-    }                                                                              \
-                                                                                   \
-    [[nodiscard]]                                                                  \
-    inline const __ctype &getValueAt(size_t index) const {                         \
-        return _getValueAt<__ctype>(index);                                        \
-    }                                                                              \
-                                                                                   \
-    [[nodiscard]]                                                                  \
-    inline const __ctype &operator[](size_t index) const {                         \
-        return _getValueAt<__ctype>(index);                                        \
-    }                                                                              \
-                                                                                   \
-    [[nodiscard]]                                                                  \
-    inline const __ctype& at(size_t index) const {                                 \
-        return _at<__ctype>(index);                                                \
-    }                                                                              \
-                                                                                   \
-    inline void setValues(const __ctype *values, uint32_t count) {                 \
-        _setValues(__dtype, values, count);                                        \
-    }                                                                              \
-                                                                                   \
-    void setValues(                                                                \
-        const __ctype *values,                                                     \
-        const uint32_t *dims,                                                      \
-        dimct_t dimCount                                                           \
-    ) {                                                                            \
-        _setValues(__dtype, values, dims, dimCount);                               \
-    }                                                                              \
-                                                                                   \
-    [[nodiscard]]                                                                  \
-    inline __ctype * begin() const {                                               \
-        return _begin<__ctype>();                                                  \
-    }                                                                              \
-                                                                                   \
-    [[nodiscard]]                                                                  \
-    inline __ctype * end() const {                                                 \
-        return _end<__ctype>();                                                    \
-    }                                                                              \
-                                                                                   \
-    _MDSPLUS_ARRAY_BOOTSTRAP_STD(ArrayType)
 
 class Int8Array : public Array
 {
 public:
 
-    _MDSPLUS_ARRAY_BOOTSTRAP(Int8Array, int8_t, DType::B)
+    typedef int8_t __ctype;
+    static constexpr DType __dtype = DType::B;
+
+    Int8Array() = default;
+
+    Int8Array(Int8Array &&) = default;
+    Int8Array &operator=(Int8Array &&) = default;
+
+    inline Int8Array(mdsdsc_xd_t &&xd, Tree *tree = nullptr)
+        : Array(std::move(xd), tree)
+    { }
+
+    inline Int8Array(
+        std::initializer_list<__ctype> values,
+        const std::vector<uint32_t> &dims = {}
+    )
+        : Array(__dtype, std::vector<__ctype>(values.begin(), values.end()), dims)
+    { }
+
+    inline const char * getClassName() const override {
+        return "Int8Array";
+    }
+
+    [[nodiscard]]
+    inline Int8Array clone() const {
+        return _clone<Int8Array>();
+    }
+
+    [[nodiscard]]
+    inline std::vector<__ctype> getVector() const {
+        return _getVector<__ctype>();
+    }
+
+    [[nodiscard]]
+    inline std::vector<__ctype> getValues() const {
+        return getVector();
+    }
+
+    [[nodiscard]]
+    inline const __ctype &getValueAt(size_t index) const {
+        return _getValueAt<__ctype>(index);
+    }
+
+    [[nodiscard]]
+    inline const __ctype &operator[](size_t index) const {
+        return _getValueAt<__ctype>(index);
+    }
+
+    [[nodiscard]]
+    inline const __ctype& at(size_t index) const {
+        return _at<__ctype>(index);
+    }
+
+    inline void setValues(const __ctype *values, uint32_t count) {
+        _setValues(__dtype, values, count);
+    }
+
+    void setValues(
+        const __ctype *values,
+        const uint32_t *dims,
+        dimct_t dimCount
+    ) {
+        _setValues(__dtype, values, dims, dimCount);
+    }
+
+    [[nodiscard]]
+    inline __ctype * begin() const {
+        return _begin<__ctype>();
+    }
+
+    [[nodiscard]]
+    inline __ctype * end() const {
+        return _end<__ctype>();
+    }
+
+    #ifdef __cpp_lib_span
+
+        inline Int8Array(
+            std::span<const __ctype> values,
+            const std::vector<uint32_t>& dims = {}
+        )
+            : Array(__dtype, values, dims)
+        { }
+
+        inline void setValues(
+            std::span<const __ctype> values,
+            const std::vector<uint32_t>& dims = {}
+        ) {
+            _setValues<__ctype>(__dtype, values, dims);
+        }
+
+        inline Int8Array(
+            const std::vector<__ctype> &values,
+            const std::vector<uint32_t> &dims = {}
+        )
+            : Array(__dtype, std::span(values), dims)
+        { }
+
+        inline void setValues(
+            const std::vector<__ctype> &values,
+            const std::vector<uint32_t> &dims = {}
+        ) {
+            _setValues<__ctype>(__dtype, std::span(values), dims);
+        }
+
+        inline std::span<__ctype> getSpan() const {
+            return _getSpan<__ctype>();
+        }
+
+    #else
+
+        inline Int8Array(
+            const std::vector<__ctype> &values,
+            const std::vector<uint32_t> &dims = {}
+        )
+            : Array(__dtype, values, dims)
+        { }
+
+        inline void setValues(
+            const std::vector<__ctype> &values,
+            const std::vector<uint32_t> &dims = {}
+        ) {
+            _setValues(__dtype, values, dims);
+        }
+
+    #endif
 
     template <typename ResultType = Data>
     [[nodiscard]]
@@ -4572,7 +5964,132 @@ class UInt8Array : public Array
 {
 public:
 
-    _MDSPLUS_ARRAY_BOOTSTRAP(UInt8Array, uint8_t, DType::BU)
+    typedef uint8_t __ctype;
+    static constexpr DType __dtype = DType::BU;
+
+    UInt8Array() = default;
+
+    UInt8Array(UInt8Array &&) = default;
+    UInt8Array &operator=(UInt8Array &&) = default;
+
+    inline UInt8Array(mdsdsc_xd_t &&xd, Tree *tree = nullptr)
+        : Array(std::move(xd), tree)
+    { }
+
+    inline UInt8Array(
+        std::initializer_list<__ctype> values,
+        const std::vector<uint32_t> &dims = {}
+    )
+        : Array(__dtype, std::vector<__ctype>(values.begin(), values.end()), dims)
+    { }
+
+    inline const char * getClassName() const override {
+        return "UInt8Array";
+    }
+
+    [[nodiscard]]
+    inline UInt8Array clone() const {
+        return _clone<UInt8Array>();
+    }
+
+    [[nodiscard]]
+    inline std::vector<__ctype> getVector() const {
+        return _getVector<__ctype>();
+    }
+
+    [[nodiscard]]
+    inline std::vector<__ctype> getValues() const {
+        return getVector();
+    }
+
+    [[nodiscard]]
+    inline const __ctype &getValueAt(size_t index) const {
+        return _getValueAt<__ctype>(index);
+    }
+
+    [[nodiscard]]
+    inline const __ctype &operator[](size_t index) const {
+        return _getValueAt<__ctype>(index);
+    }
+
+    [[nodiscard]]
+    inline const __ctype& at(size_t index) const {
+        return _at<__ctype>(index);
+    }
+
+    inline void setValues(const __ctype *values, uint32_t count) {
+        _setValues(__dtype, values, count);
+    }
+
+    void setValues(
+        const __ctype *values,
+        const uint32_t *dims,
+        dimct_t dimCount
+    ) {
+        _setValues(__dtype, values, dims, dimCount);
+    }
+
+    [[nodiscard]]
+    inline __ctype * begin() const {
+        return _begin<__ctype>();
+    }
+
+    [[nodiscard]]
+    inline __ctype * end() const {
+        return _end<__ctype>();
+    }
+
+    #ifdef __cpp_lib_span
+
+        inline UInt8Array(
+            std::span<const __ctype> values,
+            const std::vector<uint32_t>& dims = {}
+        )
+            : Array(__dtype, values, dims)
+        { }
+
+        inline void setValues(
+            std::span<const __ctype> values,
+            const std::vector<uint32_t>& dims = {}
+        ) {
+            _setValues<__ctype>(__dtype, values, dims);
+        }
+
+        inline UInt8Array(
+            const std::vector<__ctype> &values,
+            const std::vector<uint32_t> &dims = {}
+        )
+            : Array(__dtype, std::span(values), dims)
+        { }
+
+        inline void setValues(
+            const std::vector<__ctype> &values,
+            const std::vector<uint32_t> &dims = {}
+        ) {
+            _setValues<__ctype>(__dtype, std::span(values), dims);
+        }
+
+        inline std::span<__ctype> getSpan() const {
+            return _getSpan<__ctype>();
+        }
+
+    #else
+
+        inline UInt8Array(
+            const std::vector<__ctype> &values,
+            const std::vector<uint32_t> &dims = {}
+        )
+            : Array(__dtype, values, dims)
+        { }
+
+        inline void setValues(
+            const std::vector<__ctype> &values,
+            const std::vector<uint32_t> &dims = {}
+        ) {
+            _setValues(__dtype, values, dims);
+        }
+
+    #endif
 
     template <typename ResultType = Data>
     [[nodiscard]]
@@ -4584,7 +6101,132 @@ class Int16Array : public Array
 {
 public:
 
-    _MDSPLUS_ARRAY_BOOTSTRAP(Int16Array, int16_t, DType::W)
+    typedef int16_t __ctype;
+    static constexpr DType __dtype = DType::W;
+
+    Int16Array() = default;
+
+    Int16Array(Int16Array &&) = default;
+    Int16Array &operator=(Int16Array &&) = default;
+
+    inline Int16Array(mdsdsc_xd_t &&xd, Tree *tree = nullptr)
+        : Array(std::move(xd), tree)
+    { }
+
+    inline Int16Array(
+        std::initializer_list<__ctype> values,
+        const std::vector<uint32_t> &dims = {}
+    )
+        : Array(__dtype, std::vector<__ctype>(values.begin(), values.end()), dims)
+    { }
+
+    inline const char * getClassName() const override {
+        return "Int16Array";
+    }
+
+    [[nodiscard]]
+    inline Int16Array clone() const {
+        return _clone<Int16Array>();
+    }
+
+    [[nodiscard]]
+    inline std::vector<__ctype> getVector() const {
+        return _getVector<__ctype>();
+    }
+
+    [[nodiscard]]
+    inline std::vector<__ctype> getValues() const {
+        return getVector();
+    }
+
+    [[nodiscard]]
+    inline const __ctype &getValueAt(size_t index) const {
+        return _getValueAt<__ctype>(index);
+    }
+
+    [[nodiscard]]
+    inline const __ctype &operator[](size_t index) const {
+        return _getValueAt<__ctype>(index);
+    }
+
+    [[nodiscard]]
+    inline const __ctype& at(size_t index) const {
+        return _at<__ctype>(index);
+    }
+
+    inline void setValues(const __ctype *values, uint32_t count) {
+        _setValues(__dtype, values, count);
+    }
+
+    void setValues(
+        const __ctype *values,
+        const uint32_t *dims,
+        dimct_t dimCount
+    ) {
+        _setValues(__dtype, values, dims, dimCount);
+    }
+
+    [[nodiscard]]
+    inline __ctype * begin() const {
+        return _begin<__ctype>();
+    }
+
+    [[nodiscard]]
+    inline __ctype * end() const {
+        return _end<__ctype>();
+    }
+
+    #ifdef __cpp_lib_span
+
+        inline Int16Array(
+            std::span<const __ctype> values,
+            const std::vector<uint32_t>& dims = {}
+        )
+            : Array(__dtype, values, dims)
+        { }
+
+        inline void setValues(
+            std::span<const __ctype> values,
+            const std::vector<uint32_t>& dims = {}
+        ) {
+            _setValues<__ctype>(__dtype, values, dims);
+        }
+
+        inline Int16Array(
+            const std::vector<__ctype> &values,
+            const std::vector<uint32_t> &dims = {}
+        )
+            : Array(__dtype, std::span(values), dims)
+        { }
+
+        inline void setValues(
+            const std::vector<__ctype> &values,
+            const std::vector<uint32_t> &dims = {}
+        ) {
+            _setValues<__ctype>(__dtype, std::span(values), dims);
+        }
+
+        inline std::span<__ctype> getSpan() const {
+            return _getSpan<__ctype>();
+        }
+
+    #else
+
+        inline Int16Array(
+            const std::vector<__ctype> &values,
+            const std::vector<uint32_t> &dims = {}
+        )
+            : Array(__dtype, values, dims)
+        { }
+
+        inline void setValues(
+            const std::vector<__ctype> &values,
+            const std::vector<uint32_t> &dims = {}
+        ) {
+            _setValues(__dtype, values, dims);
+        }
+
+    #endif
 
 }; // class Int16Array
 
@@ -4592,7 +6234,132 @@ class UInt16Array : public Array
 {
 public:
 
-    _MDSPLUS_ARRAY_BOOTSTRAP(UInt16Array, uint16_t, DType::WU)
+    typedef uint16_t __ctype;
+    static constexpr DType __dtype = DType::WU;
+
+    UInt16Array() = default;
+
+    UInt16Array(UInt16Array &&) = default;
+    UInt16Array &operator=(UInt16Array &&) = default;
+
+    inline UInt16Array(mdsdsc_xd_t &&xd, Tree *tree = nullptr)
+        : Array(std::move(xd), tree)
+    { }
+
+    inline UInt16Array(
+        std::initializer_list<__ctype> values,
+        const std::vector<uint32_t> &dims = {}
+    )
+        : Array(__dtype, std::vector<__ctype>(values.begin(), values.end()), dims)
+    { }
+
+    inline const char * getClassName() const override {
+        return "UInt16Array";
+    }
+
+    [[nodiscard]]
+    inline UInt16Array clone() const {
+        return _clone<UInt16Array>();
+    }
+
+    [[nodiscard]]
+    inline std::vector<__ctype> getVector() const {
+        return _getVector<__ctype>();
+    }
+
+    [[nodiscard]]
+    inline std::vector<__ctype> getValues() const {
+        return getVector();
+    }
+
+    [[nodiscard]]
+    inline const __ctype &getValueAt(size_t index) const {
+        return _getValueAt<__ctype>(index);
+    }
+
+    [[nodiscard]]
+    inline const __ctype &operator[](size_t index) const {
+        return _getValueAt<__ctype>(index);
+    }
+
+    [[nodiscard]]
+    inline const __ctype& at(size_t index) const {
+        return _at<__ctype>(index);
+    }
+
+    inline void setValues(const __ctype *values, uint32_t count) {
+        _setValues(__dtype, values, count);
+    }
+
+    void setValues(
+        const __ctype *values,
+        const uint32_t *dims,
+        dimct_t dimCount
+    ) {
+        _setValues(__dtype, values, dims, dimCount);
+    }
+
+    [[nodiscard]]
+    inline __ctype * begin() const {
+        return _begin<__ctype>();
+    }
+
+    [[nodiscard]]
+    inline __ctype * end() const {
+        return _end<__ctype>();
+    }
+
+    #ifdef __cpp_lib_span
+
+        inline UInt16Array(
+            std::span<const __ctype> values,
+            const std::vector<uint32_t>& dims = {}
+        )
+            : Array(__dtype, values, dims)
+        { }
+
+        inline void setValues(
+            std::span<const __ctype> values,
+            const std::vector<uint32_t>& dims = {}
+        ) {
+            _setValues<__ctype>(__dtype, values, dims);
+        }
+
+        inline UInt16Array(
+            const std::vector<__ctype> &values,
+            const std::vector<uint32_t> &dims = {}
+        )
+            : Array(__dtype, std::span(values), dims)
+        { }
+
+        inline void setValues(
+            const std::vector<__ctype> &values,
+            const std::vector<uint32_t> &dims = {}
+        ) {
+            _setValues<__ctype>(__dtype, std::span(values), dims);
+        }
+
+        inline std::span<__ctype> getSpan() const {
+            return _getSpan<__ctype>();
+        }
+
+    #else
+
+        inline UInt16Array(
+            const std::vector<__ctype> &values,
+            const std::vector<uint32_t> &dims = {}
+        )
+            : Array(__dtype, values, dims)
+        { }
+
+        inline void setValues(
+            const std::vector<__ctype> &values,
+            const std::vector<uint32_t> &dims = {}
+        ) {
+            _setValues(__dtype, values, dims);
+        }
+
+    #endif
 
 }; // class UInt16Array
 
@@ -4600,7 +6367,132 @@ class Int32Array : public Array
 {
 public:
 
-    _MDSPLUS_ARRAY_BOOTSTRAP(Int32Array, int32_t, DType::L)
+    typedef int32_t __ctype;
+    static constexpr DType __dtype = DType::L;
+
+    Int32Array() = default;
+
+    Int32Array(Int32Array &&) = default;
+    Int32Array &operator=(Int32Array &&) = default;
+
+    inline Int32Array(mdsdsc_xd_t &&xd, Tree *tree = nullptr)
+        : Array(std::move(xd), tree)
+    { }
+
+    inline Int32Array(
+        std::initializer_list<__ctype> values,
+        const std::vector<uint32_t> &dims = {}
+    )
+        : Array(__dtype, std::vector<__ctype>(values.begin(), values.end()), dims)
+    { }
+
+    inline const char * getClassName() const override {
+        return "Int32Array";
+    }
+
+    [[nodiscard]]
+    inline Int32Array clone() const {
+        return _clone<Int32Array>();
+    }
+
+    [[nodiscard]]
+    inline std::vector<__ctype> getVector() const {
+        return _getVector<__ctype>();
+    }
+
+    [[nodiscard]]
+    inline std::vector<__ctype> getValues() const {
+        return getVector();
+    }
+
+    [[nodiscard]]
+    inline const __ctype &getValueAt(size_t index) const {
+        return _getValueAt<__ctype>(index);
+    }
+
+    [[nodiscard]]
+    inline const __ctype &operator[](size_t index) const {
+        return _getValueAt<__ctype>(index);
+    }
+
+    [[nodiscard]]
+    inline const __ctype& at(size_t index) const {
+        return _at<__ctype>(index);
+    }
+
+    inline void setValues(const __ctype *values, uint32_t count) {
+        _setValues(__dtype, values, count);
+    }
+
+    void setValues(
+        const __ctype *values,
+        const uint32_t *dims,
+        dimct_t dimCount
+    ) {
+        _setValues(__dtype, values, dims, dimCount);
+    }
+
+    [[nodiscard]]
+    inline __ctype * begin() const {
+        return _begin<__ctype>();
+    }
+
+    [[nodiscard]]
+    inline __ctype * end() const {
+        return _end<__ctype>();
+    }
+
+    #ifdef __cpp_lib_span
+
+        inline Int32Array(
+            std::span<const __ctype> values,
+            const std::vector<uint32_t>& dims = {}
+        )
+            : Array(__dtype, values, dims)
+        { }
+
+        inline void setValues(
+            std::span<const __ctype> values,
+            const std::vector<uint32_t>& dims = {}
+        ) {
+            _setValues<__ctype>(__dtype, values, dims);
+        }
+
+        inline Int32Array(
+            const std::vector<__ctype> &values,
+            const std::vector<uint32_t> &dims = {}
+        )
+            : Array(__dtype, std::span(values), dims)
+        { }
+
+        inline void setValues(
+            const std::vector<__ctype> &values,
+            const std::vector<uint32_t> &dims = {}
+        ) {
+            _setValues<__ctype>(__dtype, std::span(values), dims);
+        }
+
+        inline std::span<__ctype> getSpan() const {
+            return _getSpan<__ctype>();
+        }
+
+    #else
+
+        inline Int32Array(
+            const std::vector<__ctype> &values,
+            const std::vector<uint32_t> &dims = {}
+        )
+            : Array(__dtype, values, dims)
+        { }
+
+        inline void setValues(
+            const std::vector<__ctype> &values,
+            const std::vector<uint32_t> &dims = {}
+        ) {
+            _setValues(__dtype, values, dims);
+        }
+
+    #endif
 
 }; // class Int32Array
 
@@ -4608,7 +6500,132 @@ class UInt32Array : public Array
 {
 public:
 
-    _MDSPLUS_ARRAY_BOOTSTRAP(UInt32Array, uint32_t, DType::LU)
+    typedef uint32_t __ctype;
+    static constexpr DType __dtype = DType::LU;
+
+    UInt32Array() = default;
+
+    UInt32Array(UInt32Array &&) = default;
+    UInt32Array &operator=(UInt32Array &&) = default;
+
+    inline UInt32Array(mdsdsc_xd_t &&xd, Tree *tree = nullptr)
+        : Array(std::move(xd), tree)
+    { }
+
+    inline UInt32Array(
+        std::initializer_list<__ctype> values,
+        const std::vector<uint32_t> &dims = {}
+    )
+        : Array(__dtype, std::vector<__ctype>(values.begin(), values.end()), dims)
+    { }
+
+    inline const char * getClassName() const override {
+        return "UInt32Array";
+    }
+
+    [[nodiscard]]
+    inline UInt32Array clone() const {
+        return _clone<UInt32Array>();
+    }
+
+    [[nodiscard]]
+    inline std::vector<__ctype> getVector() const {
+        return _getVector<__ctype>();
+    }
+
+    [[nodiscard]]
+    inline std::vector<__ctype> getValues() const {
+        return getVector();
+    }
+
+    [[nodiscard]]
+    inline const __ctype &getValueAt(size_t index) const {
+        return _getValueAt<__ctype>(index);
+    }
+
+    [[nodiscard]]
+    inline const __ctype &operator[](size_t index) const {
+        return _getValueAt<__ctype>(index);
+    }
+
+    [[nodiscard]]
+    inline const __ctype& at(size_t index) const {
+        return _at<__ctype>(index);
+    }
+
+    inline void setValues(const __ctype *values, uint32_t count) {
+        _setValues(__dtype, values, count);
+    }
+
+    void setValues(
+        const __ctype *values,
+        const uint32_t *dims,
+        dimct_t dimCount
+    ) {
+        _setValues(__dtype, values, dims, dimCount);
+    }
+
+    [[nodiscard]]
+    inline __ctype * begin() const {
+        return _begin<__ctype>();
+    }
+
+    [[nodiscard]]
+    inline __ctype * end() const {
+        return _end<__ctype>();
+    }
+
+    #ifdef __cpp_lib_span
+
+        inline UInt32Array(
+            std::span<const __ctype> values,
+            const std::vector<uint32_t>& dims = {}
+        )
+            : Array(__dtype, values, dims)
+        { }
+
+        inline void setValues(
+            std::span<const __ctype> values,
+            const std::vector<uint32_t>& dims = {}
+        ) {
+            _setValues<__ctype>(__dtype, values, dims);
+        }
+
+        inline UInt32Array(
+            const std::vector<__ctype> &values,
+            const std::vector<uint32_t> &dims = {}
+        )
+            : Array(__dtype, std::span(values), dims)
+        { }
+
+        inline void setValues(
+            const std::vector<__ctype> &values,
+            const std::vector<uint32_t> &dims = {}
+        ) {
+            _setValues<__ctype>(__dtype, std::span(values), dims);
+        }
+
+        inline std::span<__ctype> getSpan() const {
+            return _getSpan<__ctype>();
+        }
+
+    #else
+
+        inline UInt32Array(
+            const std::vector<__ctype> &values,
+            const std::vector<uint32_t> &dims = {}
+        )
+            : Array(__dtype, values, dims)
+        { }
+
+        inline void setValues(
+            const std::vector<__ctype> &values,
+            const std::vector<uint32_t> &dims = {}
+        ) {
+            _setValues(__dtype, values, dims);
+        }
+
+    #endif
 
 }; // class UInt32Array
 
@@ -4616,7 +6633,132 @@ class Int64Array : public Array
 {
 public:
 
-    _MDSPLUS_ARRAY_BOOTSTRAP(Int64Array, int64_t, DType::Q)
+    typedef int64_t __ctype;
+    static constexpr DType __dtype = DType::Q;
+
+    Int64Array() = default;
+
+    Int64Array(Int64Array &&) = default;
+    Int64Array &operator=(Int64Array &&) = default;
+
+    inline Int64Array(mdsdsc_xd_t &&xd, Tree *tree = nullptr)
+        : Array(std::move(xd), tree)
+    { }
+
+    inline Int64Array(
+        std::initializer_list<__ctype> values,
+        const std::vector<uint32_t> &dims = {}
+    )
+        : Array(__dtype, std::vector<__ctype>(values.begin(), values.end()), dims)
+    { }
+
+    inline const char * getClassName() const override {
+        return "Int64Array";
+    }
+
+    [[nodiscard]]
+    inline Int64Array clone() const {
+        return _clone<Int64Array>();
+    }
+
+    [[nodiscard]]
+    inline std::vector<__ctype> getVector() const {
+        return _getVector<__ctype>();
+    }
+
+    [[nodiscard]]
+    inline std::vector<__ctype> getValues() const {
+        return getVector();
+    }
+
+    [[nodiscard]]
+    inline const __ctype &getValueAt(size_t index) const {
+        return _getValueAt<__ctype>(index);
+    }
+
+    [[nodiscard]]
+    inline const __ctype &operator[](size_t index) const {
+        return _getValueAt<__ctype>(index);
+    }
+
+    [[nodiscard]]
+    inline const __ctype& at(size_t index) const {
+        return _at<__ctype>(index);
+    }
+
+    inline void setValues(const __ctype *values, uint32_t count) {
+        _setValues(__dtype, values, count);
+    }
+
+    void setValues(
+        const __ctype *values,
+        const uint32_t *dims,
+        dimct_t dimCount
+    ) {
+        _setValues(__dtype, values, dims, dimCount);
+    }
+
+    [[nodiscard]]
+    inline __ctype * begin() const {
+        return _begin<__ctype>();
+    }
+
+    [[nodiscard]]
+    inline __ctype * end() const {
+        return _end<__ctype>();
+    }
+
+    #ifdef __cpp_lib_span
+
+        inline Int64Array(
+            std::span<const __ctype> values,
+            const std::vector<uint32_t>& dims = {}
+        )
+            : Array(__dtype, values, dims)
+        { }
+
+        inline void setValues(
+            std::span<const __ctype> values,
+            const std::vector<uint32_t>& dims = {}
+        ) {
+            _setValues<__ctype>(__dtype, values, dims);
+        }
+
+        inline Int64Array(
+            const std::vector<__ctype> &values,
+            const std::vector<uint32_t> &dims = {}
+        )
+            : Array(__dtype, std::span(values), dims)
+        { }
+
+        inline void setValues(
+            const std::vector<__ctype> &values,
+            const std::vector<uint32_t> &dims = {}
+        ) {
+            _setValues<__ctype>(__dtype, std::span(values), dims);
+        }
+
+        inline std::span<__ctype> getSpan() const {
+            return _getSpan<__ctype>();
+        }
+
+    #else
+
+        inline Int64Array(
+            const std::vector<__ctype> &values,
+            const std::vector<uint32_t> &dims = {}
+        )
+            : Array(__dtype, values, dims)
+        { }
+
+        inline void setValues(
+            const std::vector<__ctype> &values,
+            const std::vector<uint32_t> &dims = {}
+        ) {
+            _setValues(__dtype, values, dims);
+        }
+
+    #endif
 
 }; // class Int64Array
 
@@ -4624,7 +6766,132 @@ class UInt64Array : public Array
 {
 public:
 
-    _MDSPLUS_ARRAY_BOOTSTRAP(UInt64Array, uint64_t, DType::QU)
+    typedef uint64_t __ctype;
+    static constexpr DType __dtype = DType::QU;
+
+    UInt64Array() = default;
+
+    UInt64Array(UInt64Array &&) = default;
+    UInt64Array &operator=(UInt64Array &&) = default;
+
+    inline UInt64Array(mdsdsc_xd_t &&xd, Tree *tree = nullptr)
+        : Array(std::move(xd), tree)
+    { }
+
+    inline UInt64Array(
+        std::initializer_list<__ctype> values,
+        const std::vector<uint32_t> &dims = {}
+    )
+        : Array(__dtype, std::vector<__ctype>(values.begin(), values.end()), dims)
+    { }
+
+    inline const char * getClassName() const override {
+        return "UInt64Array";
+    }
+
+    [[nodiscard]]
+    inline UInt64Array clone() const {
+        return _clone<UInt64Array>();
+    }
+
+    [[nodiscard]]
+    inline std::vector<__ctype> getVector() const {
+        return _getVector<__ctype>();
+    }
+
+    [[nodiscard]]
+    inline std::vector<__ctype> getValues() const {
+        return getVector();
+    }
+
+    [[nodiscard]]
+    inline const __ctype &getValueAt(size_t index) const {
+        return _getValueAt<__ctype>(index);
+    }
+
+    [[nodiscard]]
+    inline const __ctype &operator[](size_t index) const {
+        return _getValueAt<__ctype>(index);
+    }
+
+    [[nodiscard]]
+    inline const __ctype& at(size_t index) const {
+        return _at<__ctype>(index);
+    }
+
+    inline void setValues(const __ctype *values, uint32_t count) {
+        _setValues(__dtype, values, count);
+    }
+
+    void setValues(
+        const __ctype *values,
+        const uint32_t *dims,
+        dimct_t dimCount
+    ) {
+        _setValues(__dtype, values, dims, dimCount);
+    }
+
+    [[nodiscard]]
+    inline __ctype * begin() const {
+        return _begin<__ctype>();
+    }
+
+    [[nodiscard]]
+    inline __ctype * end() const {
+        return _end<__ctype>();
+    }
+
+    #ifdef __cpp_lib_span
+
+        inline UInt64Array(
+            std::span<const __ctype> values,
+            const std::vector<uint32_t>& dims = {}
+        )
+            : Array(__dtype, values, dims)
+        { }
+
+        inline void setValues(
+            std::span<const __ctype> values,
+            const std::vector<uint32_t>& dims = {}
+        ) {
+            _setValues<__ctype>(__dtype, values, dims);
+        }
+
+        inline UInt64Array(
+            const std::vector<__ctype> &values,
+            const std::vector<uint32_t> &dims = {}
+        )
+            : Array(__dtype, std::span(values), dims)
+        { }
+
+        inline void setValues(
+            const std::vector<__ctype> &values,
+            const std::vector<uint32_t> &dims = {}
+        ) {
+            _setValues<__ctype>(__dtype, std::span(values), dims);
+        }
+
+        inline std::span<__ctype> getSpan() const {
+            return _getSpan<__ctype>();
+        }
+
+    #else
+
+        inline UInt64Array(
+            const std::vector<__ctype> &values,
+            const std::vector<uint32_t> &dims = {}
+        )
+            : Array(__dtype, values, dims)
+        { }
+
+        inline void setValues(
+            const std::vector<__ctype> &values,
+            const std::vector<uint32_t> &dims = {}
+        ) {
+            _setValues(__dtype, values, dims);
+        }
+
+    #endif
 
 }; // class UInt64Array
 
@@ -4632,7 +6899,132 @@ class Float32Array : public Array
 {
 public:
 
-    _MDSPLUS_ARRAY_BOOTSTRAP(Float32Array, float, DType::FS)
+    typedef float __ctype;
+    static constexpr DType __dtype = DType::FS;
+
+    Float32Array() = default;
+
+    Float32Array(Float32Array &&) = default;
+    Float32Array &operator=(Float32Array &&) = default;
+
+    inline Float32Array(mdsdsc_xd_t &&xd, Tree *tree = nullptr)
+        : Array(std::move(xd), tree)
+    { }
+
+    inline Float32Array(
+        std::initializer_list<__ctype> values,
+        const std::vector<uint32_t> &dims = {}
+    )
+        : Array(__dtype, std::vector<__ctype>(values.begin(), values.end()), dims)
+    { }
+
+    inline const char * getClassName() const override {
+        return "Float32Array";
+    }
+
+    [[nodiscard]]
+    inline Float32Array clone() const {
+        return _clone<Float32Array>();
+    }
+
+    [[nodiscard]]
+    inline std::vector<__ctype> getVector() const {
+        return _getVector<__ctype>();
+    }
+
+    [[nodiscard]]
+    inline std::vector<__ctype> getValues() const {
+        return getVector();
+    }
+
+    [[nodiscard]]
+    inline const __ctype &getValueAt(size_t index) const {
+        return _getValueAt<__ctype>(index);
+    }
+
+    [[nodiscard]]
+    inline const __ctype &operator[](size_t index) const {
+        return _getValueAt<__ctype>(index);
+    }
+
+    [[nodiscard]]
+    inline const __ctype& at(size_t index) const {
+        return _at<__ctype>(index);
+    }
+
+    inline void setValues(const __ctype *values, uint32_t count) {
+        _setValues(__dtype, values, count);
+    }
+
+    void setValues(
+        const __ctype *values,
+        const uint32_t *dims,
+        dimct_t dimCount
+    ) {
+        _setValues(__dtype, values, dims, dimCount);
+    }
+
+    [[nodiscard]]
+    inline __ctype * begin() const {
+        return _begin<__ctype>();
+    }
+
+    [[nodiscard]]
+    inline __ctype * end() const {
+        return _end<__ctype>();
+    }
+
+    #ifdef __cpp_lib_span
+
+        inline Float32Array(
+            std::span<const __ctype> values,
+            const std::vector<uint32_t>& dims = {}
+        )
+            : Array(__dtype, values, dims)
+        { }
+
+        inline void setValues(
+            std::span<const __ctype> values,
+            const std::vector<uint32_t>& dims = {}
+        ) {
+            _setValues<__ctype>(__dtype, values, dims);
+        }
+
+        inline Float32Array(
+            const std::vector<__ctype> &values,
+            const std::vector<uint32_t> &dims = {}
+        )
+            : Array(__dtype, std::span(values), dims)
+        { }
+
+        inline void setValues(
+            const std::vector<__ctype> &values,
+            const std::vector<uint32_t> &dims = {}
+        ) {
+            _setValues<__ctype>(__dtype, std::span(values), dims);
+        }
+
+        inline std::span<__ctype> getSpan() const {
+            return _getSpan<__ctype>();
+        }
+
+    #else
+
+        inline Float32Array(
+            const std::vector<__ctype> &values,
+            const std::vector<uint32_t> &dims = {}
+        )
+            : Array(__dtype, values, dims)
+        { }
+
+        inline void setValues(
+            const std::vector<__ctype> &values,
+            const std::vector<uint32_t> &dims = {}
+        ) {
+            _setValues(__dtype, values, dims);
+        }
+
+    #endif
 
 }; // class Float32Array
 
@@ -4640,7 +7032,132 @@ class Float64Array : public Array
 {
 public:
 
-    _MDSPLUS_ARRAY_BOOTSTRAP(Float64Array, double, DType::FT)
+    typedef double __ctype;
+    static constexpr DType __dtype = DType::FT;
+
+    Float64Array() = default;
+
+    Float64Array(Float64Array &&) = default;
+    Float64Array &operator=(Float64Array &&) = default;
+
+    inline Float64Array(mdsdsc_xd_t &&xd, Tree *tree = nullptr)
+        : Array(std::move(xd), tree)
+    { }
+
+    inline Float64Array(
+        std::initializer_list<__ctype> values,
+        const std::vector<uint32_t> &dims = {}
+    )
+        : Array(__dtype, std::vector<__ctype>(values.begin(), values.end()), dims)
+    { }
+
+    inline const char * getClassName() const override {
+        return "Float64Array";
+    }
+
+    [[nodiscard]]
+    inline Float64Array clone() const {
+        return _clone<Float64Array>();
+    }
+
+    [[nodiscard]]
+    inline std::vector<__ctype> getVector() const {
+        return _getVector<__ctype>();
+    }
+
+    [[nodiscard]]
+    inline std::vector<__ctype> getValues() const {
+        return getVector();
+    }
+
+    [[nodiscard]]
+    inline const __ctype &getValueAt(size_t index) const {
+        return _getValueAt<__ctype>(index);
+    }
+
+    [[nodiscard]]
+    inline const __ctype &operator[](size_t index) const {
+        return _getValueAt<__ctype>(index);
+    }
+
+    [[nodiscard]]
+    inline const __ctype& at(size_t index) const {
+        return _at<__ctype>(index);
+    }
+
+    inline void setValues(const __ctype *values, uint32_t count) {
+        _setValues(__dtype, values, count);
+    }
+
+    void setValues(
+        const __ctype *values,
+        const uint32_t *dims,
+        dimct_t dimCount
+    ) {
+        _setValues(__dtype, values, dims, dimCount);
+    }
+
+    [[nodiscard]]
+    inline __ctype * begin() const {
+        return _begin<__ctype>();
+    }
+
+    [[nodiscard]]
+    inline __ctype * end() const {
+        return _end<__ctype>();
+    }
+
+    #ifdef __cpp_lib_span
+
+        inline Float64Array(
+            std::span<const __ctype> values,
+            const std::vector<uint32_t>& dims = {}
+        )
+            : Array(__dtype, values, dims)
+        { }
+
+        inline void setValues(
+            std::span<const __ctype> values,
+            const std::vector<uint32_t>& dims = {}
+        ) {
+            _setValues<__ctype>(__dtype, values, dims);
+        }
+
+        inline Float64Array(
+            const std::vector<__ctype> &values,
+            const std::vector<uint32_t> &dims = {}
+        )
+            : Array(__dtype, std::span(values), dims)
+        { }
+
+        inline void setValues(
+            const std::vector<__ctype> &values,
+            const std::vector<uint32_t> &dims = {}
+        ) {
+            _setValues<__ctype>(__dtype, std::span(values), dims);
+        }
+
+        inline std::span<__ctype> getSpan() const {
+            return _getSpan<__ctype>();
+        }
+
+    #else
+
+        inline Float64Array(
+            const std::vector<__ctype> &values,
+            const std::vector<uint32_t> &dims = {}
+        )
+            : Array(__dtype, values, dims)
+        { }
+
+        inline void setValues(
+            const std::vector<__ctype> &values,
+            const std::vector<uint32_t> &dims = {}
+        ) {
+            _setValues(__dtype, values, dims);
+        }
+
+    #endif
 
 }; // class Float64Array
 
@@ -4648,7 +7165,132 @@ class Complex32Array : public Array
 {
 public:
 
-    _MDSPLUS_ARRAY_BOOTSTRAP(Complex32Array, std::complex<float>, DType::FSC)
+    typedef std::complex<float> __ctype;
+    static constexpr DType __dtype = DType::FSC;
+
+    Complex32Array() = default;
+
+    Complex32Array(Complex32Array &&) = default;
+    Complex32Array &operator=(Complex32Array &&) = default;
+
+    inline Complex32Array(mdsdsc_xd_t &&xd, Tree *tree = nullptr)
+        : Array(std::move(xd), tree)
+    { }
+
+    inline Complex32Array(
+        std::initializer_list<__ctype> values,
+        const std::vector<uint32_t> &dims = {}
+    )
+        : Array(__dtype, std::vector<__ctype>(values.begin(), values.end()), dims)
+    { }
+
+    inline const char * getClassName() const override {
+        return "Complex32Array";
+    }
+
+    [[nodiscard]]
+    inline Complex32Array clone() const {
+        return _clone<Complex32Array>();
+    }
+
+    [[nodiscard]]
+    inline std::vector<__ctype> getVector() const {
+        return _getVector<__ctype>();
+    }
+
+    [[nodiscard]]
+    inline std::vector<__ctype> getValues() const {
+        return getVector();
+    }
+
+    [[nodiscard]]
+    inline const __ctype &getValueAt(size_t index) const {
+        return _getValueAt<__ctype>(index);
+    }
+
+    [[nodiscard]]
+    inline const __ctype &operator[](size_t index) const {
+        return _getValueAt<__ctype>(index);
+    }
+
+    [[nodiscard]]
+    inline const __ctype& at(size_t index) const {
+        return _at<__ctype>(index);
+    }
+
+    inline void setValues(const __ctype *values, uint32_t count) {
+        _setValues(__dtype, values, count);
+    }
+
+    void setValues(
+        const __ctype *values,
+        const uint32_t *dims,
+        dimct_t dimCount
+    ) {
+        _setValues(__dtype, values, dims, dimCount);
+    }
+
+    [[nodiscard]]
+    inline __ctype * begin() const {
+        return _begin<__ctype>();
+    }
+
+    [[nodiscard]]
+    inline __ctype * end() const {
+        return _end<__ctype>();
+    }
+
+    #ifdef __cpp_lib_span
+
+        inline Complex32Array(
+            std::span<const __ctype> values,
+            const std::vector<uint32_t>& dims = {}
+        )
+            : Array(__dtype, values, dims)
+        { }
+
+        inline void setValues(
+            std::span<const __ctype> values,
+            const std::vector<uint32_t>& dims = {}
+        ) {
+            _setValues<__ctype>(__dtype, values, dims);
+        }
+
+        inline Complex32Array(
+            const std::vector<__ctype> &values,
+            const std::vector<uint32_t> &dims = {}
+        )
+            : Array(__dtype, std::span(values), dims)
+        { }
+
+        inline void setValues(
+            const std::vector<__ctype> &values,
+            const std::vector<uint32_t> &dims = {}
+        ) {
+            _setValues<__ctype>(__dtype, std::span(values), dims);
+        }
+
+        inline std::span<__ctype> getSpan() const {
+            return _getSpan<__ctype>();
+        }
+
+    #else
+
+        inline Complex32Array(
+            const std::vector<__ctype> &values,
+            const std::vector<uint32_t> &dims = {}
+        )
+            : Array(__dtype, values, dims)
+        { }
+
+        inline void setValues(
+            const std::vector<__ctype> &values,
+            const std::vector<uint32_t> &dims = {}
+        ) {
+            _setValues(__dtype, values, dims);
+        }
+
+    #endif
 
 }; // class Complex32Array
 
@@ -4656,7 +7298,132 @@ class Complex64Array : public Array
 {
 public:
 
-    _MDSPLUS_ARRAY_BOOTSTRAP(Complex64Array, std::complex<double>, DType::FTC)
+    typedef std::complex<double> __ctype;
+    static constexpr DType __dtype = DType::FTC;
+
+    Complex64Array() = default;
+
+    Complex64Array(Complex64Array &&) = default;
+    Complex64Array &operator=(Complex64Array &&) = default;
+
+    inline Complex64Array(mdsdsc_xd_t &&xd, Tree *tree = nullptr)
+        : Array(std::move(xd), tree)
+    { }
+
+    inline Complex64Array(
+        std::initializer_list<__ctype> values,
+        const std::vector<uint32_t> &dims = {}
+    )
+        : Array(__dtype, std::vector<__ctype>(values.begin(), values.end()), dims)
+    { }
+
+    inline const char * getClassName() const override {
+        return "Complex64Array";
+    }
+
+    [[nodiscard]]
+    inline Complex64Array clone() const {
+        return _clone<Complex64Array>();
+    }
+
+    [[nodiscard]]
+    inline std::vector<__ctype> getVector() const {
+        return _getVector<__ctype>();
+    }
+
+    [[nodiscard]]
+    inline std::vector<__ctype> getValues() const {
+        return getVector();
+    }
+
+    [[nodiscard]]
+    inline const __ctype &getValueAt(size_t index) const {
+        return _getValueAt<__ctype>(index);
+    }
+
+    [[nodiscard]]
+    inline const __ctype &operator[](size_t index) const {
+        return _getValueAt<__ctype>(index);
+    }
+
+    [[nodiscard]]
+    inline const __ctype& at(size_t index) const {
+        return _at<__ctype>(index);
+    }
+
+    inline void setValues(const __ctype *values, uint32_t count) {
+        _setValues(__dtype, values, count);
+    }
+
+    void setValues(
+        const __ctype *values,
+        const uint32_t *dims,
+        dimct_t dimCount
+    ) {
+        _setValues(__dtype, values, dims, dimCount);
+    }
+
+    [[nodiscard]]
+    inline __ctype * begin() const {
+        return _begin<__ctype>();
+    }
+
+    [[nodiscard]]
+    inline __ctype * end() const {
+        return _end<__ctype>();
+    }
+
+    #ifdef __cpp_lib_span
+
+        inline Complex64Array(
+            std::span<const __ctype> values,
+            const std::vector<uint32_t>& dims = {}
+        )
+            : Array(__dtype, values, dims)
+        { }
+
+        inline void setValues(
+            std::span<const __ctype> values,
+            const std::vector<uint32_t>& dims = {}
+        ) {
+            _setValues<__ctype>(__dtype, values, dims);
+        }
+
+        inline Complex64Array(
+            const std::vector<__ctype> &values,
+            const std::vector<uint32_t> &dims = {}
+        )
+            : Array(__dtype, std::span(values), dims)
+        { }
+
+        inline void setValues(
+            const std::vector<__ctype> &values,
+            const std::vector<uint32_t> &dims = {}
+        ) {
+            _setValues<__ctype>(__dtype, std::span(values), dims);
+        }
+
+        inline std::span<__ctype> getSpan() const {
+            return _getSpan<__ctype>();
+        }
+
+    #else
+
+        inline Complex64Array(
+            const std::vector<__ctype> &values,
+            const std::vector<uint32_t> &dims = {}
+        )
+            : Array(__dtype, values, dims)
+        { }
+
+        inline void setValues(
+            const std::vector<__ctype> &values,
+            const std::vector<uint32_t> &dims = {}
+        ) {
+            _setValues(__dtype, values, dims);
+        }
+
+    #endif
 
 }; // class Complex64Array
 
@@ -5095,6 +7862,24 @@ public:
         return ResultType();
     }
 
+protected:
+
+    void _setTree(Tree * tree)
+    {
+        // Don't overwrite our tree with nullptr
+        if (!tree) {
+            return;
+        }
+
+        // We can't reference two trees at once
+        if (getTree() && tree != getTree()) {
+            // TODO: Throw custom exception?
+            throw TdiArgumentMismatch();
+        }
+
+        setTree(tree);
+    }
+
 }; // class Record
 
 #define MDSPLUS_RECORD_BOOTSTRAP(RecordType, DataType)           \
@@ -5155,6 +7940,10 @@ public:
         DataView argHelp(help);
         DataView argValidation(validation);
 
+        _setTree(argValue.getTree());
+        _setTree(argHelp.getTree());
+        _setTree(argValidation.getTree());
+
         DESCRIPTOR_PARAM(dsc,
             argValue.getDescriptor(),
             argHelp.getDescriptor(),
@@ -5209,6 +7998,10 @@ public:
         DataView argRaw(raw);
         DataView argDimension(dimension);
 
+        _setTree(argValue.getTree());
+        _setTree(argRaw.getTree());
+        _setTree(argDimension.getTree());
+
         DESCRIPTOR_SIGNAL_1(dsc,
             argValue.getDescriptor(),
             argRaw.getDescriptor(),
@@ -5235,6 +8028,9 @@ public:
         DataView argRaw(raw);
         std::vector<DataView> argDimensions = { DataView(dimensions)... };
 
+        _setTree(argValue.getTree());
+        _setTree(argRaw.getTree());
+
         DESCRIPTOR_SIGNAL(dsc,
             sizeof...(dimensions),
             argValue.getDescriptor(),
@@ -5243,6 +8039,7 @@ public:
 
         for (size_t i = 0; i < argDimensions.size(); ++i) {
             dsc.dimensions[i] = argDimensions[i].getDescriptor();
+            _setTree(argDimensions[i].getTree());
         }
 
         int status = MdsCopyDxXd((mdsdsc_t *)&dsc, &_xd);
@@ -5296,6 +8093,9 @@ public:
         DataView tmpWindow(window);
         DataView tmpAxis(axis);
 
+        _setTree(tmpWindow.getTree());
+        _setTree(tmpAxis.getTree());
+
         DESCRIPTOR_DIMENSION(dsc,
             tmpWindow.getDescriptor(),
             tmpAxis.getDescriptor()
@@ -5342,6 +8142,10 @@ public:
         DataView argStartIndex(startIndex);
         DataView argEndIndex(endIndex);
         DataView argValueAtIndex0(valueAtIndex0);
+
+        _setTree(argStartIndex.getTree());
+        _setTree(argEndIndex.getTree());
+        _setTree(argValueAtIndex0.getTree());
 
         DESCRIPTOR_WINDOW(dsc,
             argStartIndex.getDescriptor(),
@@ -5395,6 +8199,7 @@ public:
 
         for (size_t i = 0; i < argList.size(); ++i) {
             dsc.arguments[i] = argList[i].getDescriptor();
+            _setTree(argList[i].getTree());
         }
 
         int status = MdsCopyDxXd((mdsdsc_t *)&dsc, &_xd);
@@ -5404,6 +8209,11 @@ public:
     }
 
     Data call() const;
+
+    template <typename ResultType = Data>
+    inline ResultType getData() const {
+        return call().releaseAndConvert<ResultType>();
+    }
 
 }; // class Function
 
@@ -5430,6 +8240,10 @@ public:
         DataView argBegin(begin);
         DataView argEnding(ending);
         DataView argDelta(delta);
+
+        _setTree(argBegin.getTree());
+        _setTree(argEnding.getTree());
+        _setTree(argDelta.getTree());
 
         DESCRIPTOR_RANGE(dsc,
             argBegin.getDescriptor(),
@@ -5486,6 +8300,9 @@ public:
         DataView argValue(value);
         DataView argUnits(units);
 
+        _setTree(argValue.getTree());
+        _setTree(argUnits.getTree());
+
         DESCRIPTOR_WITH_UNITS(dsc,
             argValue.getDescriptor(),
             argUnits.getDescriptor()
@@ -5527,6 +8344,9 @@ public:
         DataView argValue(value);
         DataView argError(error);
 
+        _setTree(argValue.getTree());
+        _setTree(argError.getTree());
+
         DESCRIPTOR_WITH_ERROR(dsc,
             argValue.getDescriptor(),
             argError.getDescriptor()
@@ -5555,770 +8375,6 @@ public:
 MDSPLUS_RECORD_CUSTOMIZATION(WithError)
 
 // TODO: Opaque?
-
-enum class Usage : uint8_t
-{
-    Any = TreeUSAGE_ANY,
-    Structure = TreeUSAGE_STRUCTURE,
-    Action = TreeUSAGE_ACTION,
-    Device = TreeUSAGE_DEVICE,
-    Dispatch = TreeUSAGE_DISPATCH,
-    Numeric = TreeUSAGE_NUMERIC,
-    Signal = TreeUSAGE_SIGNAL,
-    Task = TreeUSAGE_TASK,
-    Text = TreeUSAGE_TEXT,
-    Window = TreeUSAGE_WINDOW,
-    Axis = TreeUSAGE_AXIS,
-    Subtree = TreeUSAGE_SUBTREE,
-    CompoundData = TreeUSAGE_COMPOUND_DATA,
-
-}; // enum class Usage
-
-std::string to_string(const Usage& usage);
-
-struct TreeNodeFlags
-{
-    uint32_t State : 1;
-    uint32_t ParentState : 1;
-    uint32_t Essential : 1;
-    uint32_t Cached : 1;
-    uint32_t Versions : 1;
-    uint32_t Segmented : 1;
-    uint32_t SetupInformation : 1;
-    uint32_t WriteOnce : 1;
-    uint32_t Compressible : 1;
-    uint32_t DoNotCompress : 1;
-    uint32_t CompressOnPut : 1;
-    uint32_t NoWriteModel : 1;
-    uint32_t NoWriteShot : 1;
-    uint32_t PathReference : 1;
-    uint32_t NidReference : 1;
-    uint32_t IncludeInPulse : 1;
-    uint32_t CompressSegments : 1;
-    uint32_t : 15;
-
-}; // struct TreeNodeFlags
-
-static_assert(sizeof(TreeNodeFlags) == sizeof(uint32_t),
-    "sizeof(TreeNodeFlags) != sizeof(uint32_t)");
-
-std::string to_string(const TreeNodeFlags& flags);
-
-class Tree;
-
-class TreeNode
-{
-public:
-
-    TreeNode() = default;
-
-    inline TreeNode(Tree * tree, int nid)
-        : _tree(tree)
-        , _nid(nid)
-    { }
-
-    virtual ~TreeNode() = default;
-
-    [[nodiscard]]
-    inline Tree * getTree() const {
-        return _tree;
-    }
-
-    [[nodiscard]]
-    void * getDBID() const;
-
-    [[nodiscard]]
-    void * getContext() const;
-
-    [[nodiscard]]
-    inline int getNID() const {
-        return _nid;
-    }
-
-    TreeNode getNode(const std::string& path) const;
-
-    TreeNode addNode(const std::string& path, Usage usage) const;
-
-    TreeNode addDevice(const std::string& path, const std::string& model) const;
-
-    [[nodiscard]]
-    inline uint64_t getTimeInserted() const {
-        return _getNCI<uint64_t>(NciTIME_INSERTED);
-    }
-
-    [[nodiscard]]
-    inline uint32_t getOwnerID() const {
-        return _getNCI<uint32_t>(NciOWNER_ID);
-    }
-
-    [[nodiscard]]
-    inline class_t getClass() const {
-        return _getNCI<class_t>(NciCLASS);
-    }
-
-    [[nodiscard]]
-    inline dtype_t getDType() const {
-        return _getNCI<dtype_t>(NciDTYPE);
-    }
-
-    [[nodiscard]]
-    inline uint32_t getLength() const {
-        return _getNCI<uint32_t>(NciLENGTH);
-    }
-
-    [[nodiscard]]
-    inline uint32_t getStatus() const {
-        return _getNCI<uint32_t>(NciSTATUS);
-    }
-
-    [[nodiscard]]
-    inline uint16_t getConglomorateElements() const {
-        return _getNCI<uint16_t>(NciCONGLOMERATE_ELT);
-    }
-
-    [[nodiscard]]
-    inline TreeNodeFlags getFlags() const {
-        return _getNCI<TreeNodeFlags>(NciGET_FLAGS);
-    }
-
-    inline void setFlagsOn(TreeNodeFlags flags) const {
-
-    }
-
-    inline void setFlagsOff(TreeNodeFlags flags) const {
-
-    }
-
-    inline void clearFlags(TreeNodeFlags flags) const {
-        setFlagsOff(flags);
-    }
-
-    [[nodiscard]]
-    inline uint32_t getFlagsInt() const {
-        return _getNCI<uint32_t>(NciGET_FLAGS);
-    }
-
-    [[nodiscard]]
-    std::string getNodeName() const;
-
-    [[nodiscard]]
-    inline std::string getPath() const {
-        return _getStringNCI(NciPATH, 1024);
-    }
-
-    [[nodiscard]]
-    inline uint32_t getDepth() const {
-        return _getNCI<uint32_t>(NciDEPTH);
-    }
-
-    [[nodiscard]]
-    inline int getParentNID() const {
-        return _getNCI<uint32_t>(NciPARENT);
-    }
-
-    [[nodiscard]]
-    inline TreeNode getParent() const {
-        int nid = getParentNID();
-        if (nid == 0) {
-            throw TreeNodeNotFound();
-        }
-        return TreeNode(_tree, nid);
-    }
-
-    [[nodiscard]]
-    inline int getBrotherNID() const {
-        return _getNCI<uint32_t>(NciPARENT);
-    }
-
-    [[nodiscard]]
-    inline TreeNode getBrother() const {
-        int nid = getBrotherNID();
-        if (nid == 0) {
-            throw TreeNodeNotFound();
-        }
-        return TreeNode(_tree, nid);
-    }
-
-    [[nodiscard]]
-    inline int getMemberID() const {
-        return _getNCI<uint32_t>(NciPARENT);
-    }
-
-    [[nodiscard]]
-    inline TreeNode getMember() const {
-        int nid = getMemberID();
-        if (nid == 0) {
-            throw TreeNodeNotFound();
-        }
-        return TreeNode(_tree, nid);
-    }
-
-    [[nodiscard]]
-    inline int getChildNID() const {
-        return _getNCI<uint32_t>(NciPARENT);
-    }
-
-    [[nodiscard]]
-    inline TreeNode getChild() const {
-        int nid = getChildNID();
-        if (nid == 0) {
-            throw TreeNodeNotFound();
-        }
-        return TreeNode(_tree, nid);
-    }
-
-    [[nodiscard]]
-    inline ncik_t getParentRelationship() const {
-        return _getNCI<ncik_t>(NciPARENT_RELATIONSHIP);
-    }
-
-    [[nodiscard]]
-    inline std::vector<int> getConglomerateElementNIDs() const {
-        return _getNIDArrayNCI(NciCONGLOMERATE_NIDS, NciNUMBER_OF_ELTS);
-    }
-
-    [[nodiscard]]
-    inline std::vector<TreeNode> getConglomerateElements() const {
-        return _getTreeNodeArrayNCI(NciCONGLOMERATE_NIDS, NciNUMBER_OF_ELTS);
-    }
-
-    [[nodiscard]]
-    inline std::string getOriginalPartName() const {
-        return _getStringNCI(NciORIGINAL_PART_NAME, 1024);
-    }
-
-    [[nodiscard]]
-    inline uint32_t getNumberOfMembers() const {
-        return _getNCI<uint32_t>(NciNUMBER_OF_MEMBERS);
-    }
-
-    [[nodiscard]]
-    inline uint32_t getNumberOfChildren() const {
-        return _getNCI<uint32_t>(NciNUMBER_OF_CHILDREN);
-    }
-
-    [[nodiscard]]
-    inline std::vector<int> getMemberNIDs() const {
-        return _getNIDArrayNCI(NciMEMBER_NIDS, NciNUMBER_OF_MEMBERS);
-    }
-
-    [[nodiscard]]
-    inline std::vector<TreeNode> getMembers() const {
-        return _getTreeNodeArrayNCI(NciMEMBER_NIDS, NciNUMBER_OF_MEMBERS);
-    }
-
-    [[nodiscard]]
-    inline std::vector<int> getChildrenNIDs() const {
-        return _getNIDArrayNCI(NciCHILDREN_NIDS, NciNUMBER_OF_CHILDREN);
-    }
-
-    [[nodiscard]]
-    inline std::vector<TreeNode> getChildren() const {
-        return _getTreeNodeArrayNCI(NciCHILDREN_NIDS, NciNUMBER_OF_CHILDREN);
-    }
-
-    [[nodiscard]]
-    std::vector<TreeNode> getMembersAndChildren(bool sortedNIDs = true) const;
-
-    [[nodiscard]]
-    inline std::string getFullPath() const {
-        return _getStringNCI(NciFULLPATH, 1024);
-    }
-
-    [[nodiscard]]
-    inline std::string getMinPath() const {
-        return _getStringNCI(NciMINPATH, 1024);
-    }
-
-    [[nodiscard]]
-    inline usage_t getUsage() const {
-        return _getNCI<usage_t>(NciUSAGE);
-    }
-
-    // setUsage
-
-    [[nodiscard]]
-    inline std::string getParentTreeName() const {
-        return _getStringNCI(NciPARENT_TREE, 64);
-    }
-
-    [[nodiscard]]
-    inline uint32_t getRecordLength() const {
-        return _getNCI<uint32_t>(NciRLENGTH);
-    }
-
-    [[nodiscard]]
-    inline uint32_t getNumberOfElements() const {
-        return _getNCI<uint32_t>(NciNUMBER_OF_ELTS);
-    }
-
-    [[nodiscard]]
-    inline bool hasDataInNCI() const {
-        return _getNCI<bool>(NciDATA_IN_NCI);
-    }
-
-    [[nodiscard]]
-    inline bool hasErrorOnPut() const {
-        return _getNCI<bool>(NciERROR_ON_PUT);
-    }
-
-    [[nodiscard]]
-    inline uint64_t getRFA() const {
-        return _getNCI<uint64_t>(NciRFA);
-    }
-
-    [[nodiscard]]
-    inline uint32_t getIOStatus() const {
-        return _getNCI<uint32_t>(NciIO_STATUS);
-    }
-
-    [[nodiscard]]
-    inline uint32_t getIOSTV() const {
-        return _getNCI<uint32_t>(NciIO_STV);
-    }
-
-    [[nodiscard]]
-    inline std::string getDTypeString() const {
-        return _getStringNCI(NciDTYPE_STR, 64);
-    }
-
-    [[nodiscard]]
-    inline std::string getUsageString() const {
-        return _getStringNCI(NciUSAGE_STR, 64);
-    }
-
-    [[nodiscard]]
-    inline std::string getClassString() const {
-        return _getStringNCI(NciCLASS_STR, 64);
-    }
-
-    [[nodiscard]]
-    inline uint32_t getVersion() const {
-        return _getNCI<uint32_t>(NciVERSION);
-    }
-
-    [[nodiscard]]
-    inline uint8_t getCompressionMethod() const {
-        return _getNCI<uint8_t>(NciCOMPRESSION_METHOD);
-    }
-
-    // setCompressionMethod?
-
-    [[nodiscard]]
-    inline std::string getCompressionMethodString() const {
-        return _getStringNCI(NciCOMPRESSION_METHOD_STR, 64);
-    }
-
-    // setCompressionMethodString?
-
-    // template <typename T = Data>
-    // [[nodiscard]]
-    // inline T getExtendedAttribute(const std::string& name) {
-    //     _TreeSetXNci(void *dbid, int nid, const char *xnciname, mdsdsc_t *value)
-    // }
-
-    // void setExtendedAttribute(const std::string& name, const Data& data);
-
-    [[nodiscard]]
-    Data getRecord() const;
-
-    void putRecord(const Data& data) const;
-
-    template <typename DataType = Data>
-    [[nodiscard]]
-    DataType getData() const;
-
-    template <typename DataType = Data, typename UnitsType = Data>
-    [[nodiscard]]
-    std::tuple<DataType, UnitsType> getDataWithUnits() const;
-
-    template <typename DataType>
-    inline void setData(DataType value) const {
-        putRecord(Data::FromScalar(value));
-    }
-
-    template <typename DataType, typename UnitsType>
-    inline void setDataWithUnits(DataType value, UnitsType units) const {
-        putRecord(WithUnits(Data::FromScalar(value), Data::FromScalar(units)));
-    }
-
-#ifdef __cpp_lib_span
-
-    template <typename DataType>
-    void setArrayData(const std::span<const DataType> values, const std::vector<uint32_t>& dims = {}) const {
-        if (dims.empty()) {
-            return setArrayData(values.data(), { values.size() });
-        }
-        return setArrayData(values.data(), dims);
-    }
-
-    template <typename DataType, typename UnitsType>
-    void setArrayDataWithUnits(const std::span<const DataType> values, UnitsType units, const std::vector<uint32_t>& dims = {}) const {
-        if (dims.empty()) {
-            return setArrayDataWithUnits(values.data(), units, { values.size() });
-        }
-        return setArrayDataWithUnits(values.data(), units, dims);
-    }
-
-#endif
-
-    template <typename DataType>
-    inline void setArrayData(std::vector<DataType>& values, const std::vector<uint32_t>& dims = {}) const {
-        if (dims.empty()) {
-            return setArrayData(values.data(), { values.size() });
-        }
-        return setArrayData(values.data(), dims);
-    }
-
-    template <typename DataType, typename UnitsType>
-    inline void setArrayDataWithUnits(const std::vector<DataType>& values, UnitsType units, const std::vector<uint32_t>& dims = {}) const {
-        if (dims.empty()) {
-            return setArrayDataWithUnits(values.data(), units, { values.size() });
-        }
-        return setArrayDataWithUnits(values.data(), units, dims);
-    }
-
-    template <typename DataType>
-    inline void setArrayData(const DataType * values, const std::vector<uint32_t>& dims) const {
-        putRecord(Data::FromArray(values, dims));
-    }
-
-    template <typename DataType, typename UnitsType>
-    inline void setArrayDataWithUnits(const DataType * values, UnitsType units, const std::vector<uint32_t>& dims) const {
-        putRecord(WithUnits(Data::FromArray(values, dims), Data::FromScalar(units)));
-    }
-
-    template <typename ValueType>
-    void putRow(int segmentLength, ValueType value, int64_t timestamp);
-
-    template <typename ValueArrayType>
-    void putSegment(ValueArrayType values, int index = -1);
-
-    template <typename ValueArrayType>
-    inline void putTimestampedSegment(std::vector<int64_t> timestamps, ValueArrayType values) {
-        putTimestampedSegment(timestamps.data(), values);
-    }
-
-    template <typename ValueArrayType>
-    void putTimestampedSegment(int64_t * timestamps, ValueArrayType values);
-
-    template <
-        typename StartIndexType,
-        typename EndIndexType,
-        typename DimensionType,
-        typename ValueArrayType
-    >
-    void makeSegment(
-        StartIndexType startIndex,
-        EndIndexType endIndex,
-        DimensionType dimension,
-        ValueArrayType values,
-        int index = -1,
-        int rowsFilled = -1
-    ) const;
-
-    template <
-        typename StartIndexType,
-        typename EndIndexType,
-        typename DimensionType,
-        typename ValueArrayType
-    >
-    void makeSegmentResampled(
-        StartIndexType startIndex,
-        EndIndexType endIndex,
-        DimensionType dimension,
-        ValueArrayType values,
-        const TreeNode& resampleNode,
-        int resampleFactor,
-        int index = -1,
-        int rowsFilled = -1
-    ) const;
-
-    // template <typename StartIndexType, typename EndIndexType, typename DimensionType, typename ValueArrayType>
-    // void makeSegmentMinMax(
-    //     StartIndexType startIndex,
-    //     EndIndexType endIndex,
-    //     DimensionType dimension,
-    //     ValueArrayType values,
-    //     const TreeNode& resampleNode,
-    //     int resampleFactor,
-    //     int index = -1,
-    //     int rowsFilled = -1
-    // ) const;
-
-    // template <typename TimestampArrayType, typename ValueArrayType>
-    // inline void makeTimestampedSegment(
-    //     TimestampArrayType timestamps,
-    //     ValueArrayType values,
-    //     int index = -1,
-    //     int rowsFilled = -1
-    // ) const;
-
-    // template <typename ValueArrayType>
-    // inline void makeTimestampedSegment(
-    //     Int64Array timestamps,
-    //     ValueArrayType values,
-    //     int index = -1,
-    //     int rowsFilled = -1
-    // ) const;
-
-    template <typename ValueArrayType>
-    inline void makeTimestampedSegment(
-        std::vector<int64_t> timestamps,
-        ValueArrayType values,
-        int index = -1,
-        int rowsFilled = -1
-    ) const
-    {
-        makeTimestampedSegment(timestamps.data(), values, index, rowsFilled);
-    }
-
-    template <typename ValueArrayType>
-    void makeTimestampedSegment(
-        int64_t * timestamps,
-        ValueArrayType values,
-        int index = -1,
-        int rowsFilled = -1
-    ) const;
-
-    // TODO: Move
-    #ifdef __cpp_lib_optional
-
-        [[nodiscard]]
-        std::optional<TreeNode> tryGetNode(const std::string& path) const
-        {
-            int nid = 0;
-
-            int status = _TreeFindNodeRelative(getDBID(), path.data(), _nid, &nid);
-            if (status == TreeNNF) {
-                return std::nullopt;
-            }
-            else if (IS_NOT_OK(status)) {
-                throwException(status);
-            }
-
-            return TreeNode(_tree, nid);
-        }
-
-        [[nodiscard]]
-        inline std::optional<TreeNode> tryGetParent() const
-        {
-            int nid = getParentNID();
-            if (nid == 0) {
-                return std::nullopt;
-            }
-            return TreeNode(_tree, nid);
-        }
-
-        [[nodiscard]]
-        inline std::optional<TreeNode> tryGetBrother() const
-        {
-            int nid = getBrotherNID();
-            if (nid == 0) {
-                return std::nullopt;
-            }
-            return TreeNode(_tree, nid);
-        }
-
-        [[nodiscard]]
-        inline std::optional<TreeNode> tryGetMember() const
-        {
-            int nid = getMemberID();
-            if (nid == 0) {
-                return std::nullopt;
-            }
-            return TreeNode(_tree, nid);
-        }
-
-        [[nodiscard]]
-        inline std::optional<TreeNode> tryGetChild() const
-        {
-            int nid = getChildNID();
-            if (nid == 0) {
-                return std::nullopt;
-            }
-            return TreeNode(_tree, nid);
-        }
-
-        [[nodiscard]]
-        std::optional<Data> tryGetData() const
-        {
-            mdsdsc_xd_t xd = MDSDSC_XD_INITIALIZER;
-            int status = _TreeGetRecord(getDBID(), _nid, &xd);
-            if (status == TreeNODATA) {
-                return std::nullopt;
-            }
-            else if (IS_NOT_OK(status)) {
-                throwException(status);
-            }
-
-            return Data(std::move(xd));
-        }
-
-    #endif
-
-protected:
-
-    Tree * _tree = nullptr;
-
-    int _nid = -1;
-
-    template <typename ResultType>
-    ResultType _getNCI(nci_t code) const;
-
-    std::string _getStringNCI(nci_t code, int16_t size) const;
-
-    std::vector<int> _getNIDArrayNCI(nci_t code, nci_t codeForNumberOf) const;
-
-    std::vector<TreeNode> _getTreeNodeArrayNCI(nci_t code, nci_t codeForNumberOf) const;
-
-}; // class TreeNode
-
-std::string to_string(const TreeNode * node);
-
-inline std::string to_string(const TreeNode& node) {
-    return to_string(&node);
-}
-
-enum class Mode
-{
-    Normal,
-    ReadOnly,
-    Edit,
-    New,
-
-    // TODO: Rename
-    View,
-};
-
-std::string to_string(const Mode& mode);
-
-class Tree : public TreeNode
-{
-public:
-
-    static Tree GetActive() {
-        char name[64];
-        int shot;
-        int retNameLength;
-
-        DBI_ITM itmList[] = {
-            { sizeof(name), DbiNAME, name, &retNameLength, },
-            { sizeof(shot), DbiSHOTID, &shot, nullptr, },
-            { 0, DbiEND_OF_LIST, nullptr, nullptr, },
-        };
-        int status = TreeGetDbi(itmList);
-        if (IS_NOT_OK(status)) {
-            throwException(status);
-        }
-
-        return Tree(name, shot, TreeDbid());
-    }
-
-    inline void setActive() {
-        TreeSwitchDbid(getDBID());
-    }
-
-    Tree();
-
-    Tree(const std::string& treename, int shot, Mode mode = Mode::Normal)
-        : _treename(treename)
-        , _shot(shot)
-        , _mode(mode)
-    {
-        open();
-    }
-
-    Tree(const std::string& treename, int shot, void * dbid)
-        : _treename(treename)
-        , _shot(shot)
-        , _mode(Mode::View)
-        , _dbid(dbid)
-    { }
-
-    inline ~Tree()
-    {
-        if (_mode != Mode::View) {
-            TreeFreeDbid(_dbid);
-            _dbid = nullptr;
-        }
-    }
-
-    [[nodiscard]]
-    inline void * getDBID() const {
-        return _dbid;
-    }
-
-    [[nodiscard]]
-    inline void ** getContext() const {
-        return const_cast<void **>(&_dbid);
-    }
-
-    [[nodiscard]]
-    inline std::string getTreeName() const {
-        return _treename;
-    }
-
-    [[nodiscard]]
-    inline int getShot() const {
-        return _shot;
-    }
-
-    [[nodiscard]]
-    inline Mode getMode() const {
-        return _mode;
-    }
-
-    inline void open(const std::string& treename, int shot, Mode mode = Mode::Normal)
-    {
-        _treename = treename;
-        _shot = shot;
-        _mode = mode;
-
-        return open();
-    }
-
-    void open();
-
-    inline void reopen() { open(); }
-
-    void close();
-
-    void write();
-
-    inline void setDefaultNode(const std::string& path) const {
-        setDefaultNode(getNode(path));
-    }
-
-    void setDefaultNode(const TreeNode& node) const;
-
-    TreeNode getDefaultNode() const;
-
-    template <typename ResultType = Data, typename ...ArgTypes>
-    ResultType compileData(const std::string& expression, ArgTypes... args) const;
-
-    template <typename ResultType = Data, typename ...ArgTypes>
-    ResultType executeData(const std::string& expression, ArgTypes... args) const;
-
-private:
-
-    void * _dbid = nullptr;
-
-    bool _open = false;
-
-    std::string _treename;
-
-    int _shot;
-
-    Mode _mode = Mode::Normal;
-
-};
-
-std::string to_string(const Tree * tree);
-
-inline std::string to_string(const Tree& tree) {
-    return to_string(&tree);
-}
 
 class GetMany;
 class PutMany;
@@ -7137,6 +9193,8 @@ inline void StringArray::_setValues(
     }
 }
 
+// #include <mdsplusplus/Scalar.inc.hpp>
+
 inline std::vector<uint32_t> Array::getDimensions() const
 {
     mdsdsc_a_t * dsc = getArrayDescriptor();
@@ -7282,6 +9340,8 @@ inline ResultType UInt8Array::deserialize()
 
     return Data(std::move(out)).releaseAndConvert<ResultType>();
 }
+
+// #include <mdsplusplus/APD.inc.hpp>
 
 inline Data Function::call() const
 {
@@ -7515,6 +9575,49 @@ inline std::string TreeNode::getNodeName() const
     return name;
 }
 
+template <typename ValueType>
+inline void TreeNode::setExtendedAttribute(const std::string& name, ValueType value) const
+{
+    DataView argValue(value);
+    int status = _TreeSetXNci(getDBID(), _nid, name.c_str(), argValue.getDescriptor());
+    if (IS_NOT_OK(status)) {
+        throwException(status);
+    }
+}
+
+template <typename ResultType /*= Data*/>
+ResultType TreeNode::getExtendedAttribute(const std::string& name)
+{
+    mdsdsc_xd_t out = MDSDSC_XD_INITIALIZER;
+    int status = _TreeGetXNci(getDBID(), _nid, name.c_str(), &out);
+    if (IS_NOT_OK(status)) {
+        throwException(status);
+    }
+
+    return Data(std::move(out), getTree()).releaseAndConvert<ResultType>();
+}
+
+inline std::vector<std::string> TreeNode::getTags() const
+{
+    std::vector<std::string> tags;
+
+    int outnid = _nid;
+    void * findContext = nullptr;
+    while (true)
+    {
+        char * tag = _TreeFindNodeTags(getDBID(), _nid, &findContext);
+        if (!tag) {
+            break;
+        }
+
+        tags.push_back("\\" + std::string(tag));
+    }
+
+    TreeFindTagEnd(&findContext);
+
+    return tags;
+}
+
 inline Data TreeNode::getRecord() const
 {
     mdsdsc_xd_t xd = MDSDSC_XD_INITIALIZER;
@@ -7615,7 +9718,7 @@ inline std::string TreeNode::_getStringNCI(nci_t code, int16_t size) const
         throwException(status);
     }
 
-    buffer.shrink_to_fit();
+    buffer.resize(retlen);
 
     return buffer;
 }
@@ -7949,6 +10052,27 @@ inline void Tree::write()
     }
 }
 
+inline std::vector<std::string> Tree::findTagWild(const std::string& wildcard) const
+{
+    std::vector<std::string> tags;
+
+    int outnid = _nid;
+    void * findContext = nullptr;
+    while (true)
+    {
+        char * tag = _TreeFindTagWild(getDBID(), const_cast<char *>(wildcard.c_str()), &outnid, &findContext);
+        if (!tag) {
+            break;
+        }
+
+        tags.push_back(tag);
+    }
+
+    TreeFindTagEnd(&findContext);
+
+    return tags;
+}
+
 inline void Tree::setDefaultNode(const TreeNode& node) const
 {
     int status = _TreeSetDefaultNid(getDBID(), node.getNID());
@@ -8006,6 +10130,58 @@ ResultType Tree::executeData(const std::string& expression, ArgTypes... args) co
     }
 
     return Data(std::move(out), getTree()).releaseAndConvert<ResultType>();
+}
+
+template <typename ResultType>
+inline ResultType Tree::_getDBI(int16_t code) const
+{
+    ResultType value = {};
+    dbi_itm itm_lst[] = {
+        { sizeof(value), code, &value, nullptr },
+        { 0, DbiEND_OF_LIST, nullptr, nullptr },
+    };
+
+    int status = _TreeGetDbi(_tree->getDBID(), itm_lst);
+    if (IS_NOT_OK(status)) {
+        throwException(status);
+    }
+
+    return value;
+}
+
+inline std::string Tree::_getStringDBI(int16_t code, int16_t size) const
+{
+    std::string buffer;
+    buffer.resize(size);
+
+    int retlen = 0;
+    dbi_itm itemList[] = {
+        { size, code, (void *)buffer.data(), &retlen },
+        { 0, DbiEND_OF_LIST, nullptr, nullptr },
+    };
+
+    int status = _TreeGetDbi(getTree()->getDBID(), itemList);
+    if (IS_NOT_OK(status)) {
+        throwException(status);
+    }
+
+    buffer.resize(retlen);
+
+    return buffer;
+}
+
+inline void Tree::_setDBI(int16_t code, int value) const
+{
+    int retlen = 0;
+    dbi_itm itemList[] = {
+        { sizeof(value), code, &value },
+        { 0, DbiEND_OF_LIST, nullptr, nullptr },
+    };
+
+    int status = _TreeSetDbi(getTree()->getDBID(), itemList);
+    if (IS_NOT_OK(status)) {
+        throwException(status);
+    }
 }
 
 inline void Device::addParts(std::vector<DevicePart>&& parts) const
@@ -8201,6 +10377,11 @@ inline Data Connection::_get(const std::string& expression, std::vector<DataView
     return Data(std::move(dscResponse));
 }
 
+#ifdef MDSPLUS_IMPLEMENTATION
+
+// #include
+
+#endif
 } // namespace mdsplus
 
 namespace std {
@@ -8217,24 +10398,75 @@ template <> struct hash<mdsplus::String>
     }
 };
 
-#define _MDSPLUS_SPECIALIZE_STD_HASH(ScalarType)                      \
-    template <> struct hash<ScalarType>                               \
-    {                                                                 \
-        size_t operator()(const ScalarType& data) const {             \
-            return std::hash<ScalarType::__ctype>()(data.getValue()); \
-        }                                                             \
-    };
+template <> struct hash<mdsplus::Int8>
+{
+    size_t operator()(const mdsplus::Int8& data) const {
+        return std::hash<mdsplus::Int8::__ctype>()(data.getValue());
+    }
+};
 
-_MDSPLUS_SPECIALIZE_STD_HASH(mdsplus::Int8)
-_MDSPLUS_SPECIALIZE_STD_HASH(mdsplus::Int16)
-_MDSPLUS_SPECIALIZE_STD_HASH(mdsplus::Int32)
-_MDSPLUS_SPECIALIZE_STD_HASH(mdsplus::Int64)
-_MDSPLUS_SPECIALIZE_STD_HASH(mdsplus::UInt8)
-_MDSPLUS_SPECIALIZE_STD_HASH(mdsplus::UInt16)
-_MDSPLUS_SPECIALIZE_STD_HASH(mdsplus::UInt32)
-_MDSPLUS_SPECIALIZE_STD_HASH(mdsplus::UInt64)
-_MDSPLUS_SPECIALIZE_STD_HASH(mdsplus::Float32)
-_MDSPLUS_SPECIALIZE_STD_HASH(mdsplus::Float64)
+template <> struct hash<mdsplus::Int16>
+{
+    size_t operator()(const mdsplus::Int16& data) const {
+        return std::hash<mdsplus::Int16::__ctype>()(data.getValue());
+    }
+};
+
+template <> struct hash<mdsplus::Int32>
+{
+    size_t operator()(const mdsplus::Int32& data) const {
+        return std::hash<mdsplus::Int32::__ctype>()(data.getValue());
+    }
+};
+
+template <> struct hash<mdsplus::Int64>
+{
+    size_t operator()(const mdsplus::Int64& data) const {
+        return std::hash<mdsplus::Int64::__ctype>()(data.getValue());
+    }
+};
+
+template <> struct hash<mdsplus::UInt8>
+{
+    size_t operator()(const mdsplus::UInt8& data) const {
+        return std::hash<mdsplus::UInt8::__ctype>()(data.getValue());
+    }
+};
+
+template <> struct hash<mdsplus::UInt16>
+{
+    size_t operator()(const mdsplus::UInt16& data) const {
+        return std::hash<mdsplus::UInt16::__ctype>()(data.getValue());
+    }
+};
+
+template <> struct hash<mdsplus::UInt32>
+{
+    size_t operator()(const mdsplus::UInt32& data) const {
+        return std::hash<mdsplus::UInt32::__ctype>()(data.getValue());
+    }
+};
+
+template <> struct hash<mdsplus::UInt64>
+{
+    size_t operator()(const mdsplus::UInt64& data) const {
+        return std::hash<mdsplus::UInt64::__ctype>()(data.getValue());
+    }
+};
+
+template <> struct hash<mdsplus::Float32>
+{
+    size_t operator()(const mdsplus::Float32& data) const {
+        return std::hash<mdsplus::Float32::__ctype>()(data.getValue());
+    }
+};
+
+template <> struct hash<mdsplus::Float64>
+{
+    size_t operator()(const mdsplus::Float64& data) const {
+        return std::hash<mdsplus::Float64::__ctype>()(data.getValue());
+    }
+};
 
 } // namespace std
 

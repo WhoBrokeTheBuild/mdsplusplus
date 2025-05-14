@@ -20,6 +20,13 @@ foreach(_test_source ${_test_source_list})
             GTest::gtest
     )
 
+    set_target_properties(
+        ${_test_name}
+        PROPERTIES
+            CXX_STANDARD 23
+            CXX_STANDARD_REQUIRED 23
+    )
+
     add_test(
         NAME ${_test_name}
         COMMAND $<TARGET_FILE:${_test_name}>

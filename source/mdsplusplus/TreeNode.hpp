@@ -67,9 +67,12 @@ static_assert(sizeof(TreeNodeFlags) == sizeof(uint32_t),
 std::string to_string(const TreeNodeFlags& flags);
 
 class Tree;
+class DataView;
 
 class TreeNode
 {
+    friend class DataView;
+
 public:
 
     TreeNode() = default;
@@ -374,13 +377,13 @@ public:
 
     // setCompressionMethodString?
 
-    // template <typename T = Data>
-    // [[nodiscard]]
-    // inline T getExtendedAttribute(const std::string& name) {
-    //     _TreeSetXNci(void *dbid, int nid, const char *xnciname, mdsdsc_t *value)
-    // }
+    template <typename ValueType>
+    void setExtendedAttribute(const std::string& name, ValueType value) const;
 
-    // void setExtendedAttribute(const std::string& name, const Data& data);
+    template <typename ResultType = Data>
+    ResultType getExtendedAttribute(const std::string& name);
+
+    virtual std::vector<std::string> getTags() const;
 
     [[nodiscard]]
     Data getRecord() const;

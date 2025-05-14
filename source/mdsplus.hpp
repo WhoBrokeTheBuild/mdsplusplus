@@ -13,14 +13,14 @@ namespace mdsplus { }
 #include <mdsplusplus/Exceptions.hpp>
 
 #include <mdsplusplus/Data.hpp>
+#include <mdsplusplus/TreeNode.hpp>
+#include <mdsplusplus/Tree.hpp>
 #include <mdsplusplus/DataView.hpp>
 #include <mdsplusplus/String.hpp>
 #include <mdsplusplus/Scalar.hpp>
 #include <mdsplusplus/Array.hpp>
 #include <mdsplusplus/APD.hpp>
 #include <mdsplusplus/Record.hpp>
-#include <mdsplusplus/TreeNode.hpp>
-#include <mdsplusplus/Tree.hpp>
 #include <mdsplusplus/Connection.hpp>
 #include <mdsplusplus/Device.hpp>
 

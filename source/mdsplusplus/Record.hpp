@@ -60,6 +60,24 @@ public:
         return ResultType();
     }
 
+protected:
+
+    void _setTree(Tree * tree)
+    {
+        // Don't overwrite our tree with nullptr
+        if (!tree) {
+            return;
+        }
+    
+        // We can't reference two trees at once
+        if (getTree() && tree != getTree()) {
+            // TODO: Throw custom exception?
+            throw TdiArgumentMismatch();
+        }
+
+        setTree(tree);
+    }
+
 }; // class Record
 
 #define MDSPLUS_RECORD_BOOTSTRAP(RecordType, DataType)           \
@@ -121,6 +139,10 @@ public:
         DataView argHelp(help);
         DataView argValidation(validation);
 
+        _setTree(argValue.getTree());
+        _setTree(argHelp.getTree());
+        _setTree(argValidation.getTree());
+
         DESCRIPTOR_PARAM(dsc,
             argValue.getDescriptor(),
             argHelp.getDescriptor(),
@@ -175,6 +197,10 @@ public:
         DataView argRaw(raw);
         DataView argDimension(dimension);
 
+        _setTree(argValue.getTree());
+        _setTree(argRaw.getTree());
+        _setTree(argDimension.getTree());
+
         DESCRIPTOR_SIGNAL_1(dsc,
             argValue.getDescriptor(),
             argRaw.getDescriptor(),
@@ -201,6 +227,9 @@ public:
         DataView argRaw(raw);
         std::vector<DataView> argDimensions = { DataView(dimensions)... };
 
+        _setTree(argValue.getTree());
+        _setTree(argRaw.getTree());
+
         DESCRIPTOR_SIGNAL(dsc,
             sizeof...(dimensions),
             argValue.getDescriptor(),
@@ -209,6 +238,7 @@ public:
 
         for (size_t i = 0; i < argDimensions.size(); ++i) {
             dsc.dimensions[i] = argDimensions[i].getDescriptor();
+            _setTree(argDimensions[i].getTree());
         }
 
         int status = MdsCopyDxXd((mdsdsc_t *)&dsc, &_xd);
@@ -262,6 +292,9 @@ public:
         DataView tmpWindow(window);
         DataView tmpAxis(axis);
 
+        _setTree(tmpWindow.getTree());
+        _setTree(tmpAxis.getTree());
+
         DESCRIPTOR_DIMENSION(dsc,
             tmpWindow.getDescriptor(),
             tmpAxis.getDescriptor()
@@ -308,6 +341,10 @@ public:
         DataView argStartIndex(startIndex);
         DataView argEndIndex(endIndex);
         DataView argValueAtIndex0(valueAtIndex0);
+
+        _setTree(argStartIndex.getTree());
+        _setTree(argEndIndex.getTree());
+        _setTree(argValueAtIndex0.getTree());
 
         DESCRIPTOR_WINDOW(dsc,
             argStartIndex.getDescriptor(),
@@ -361,6 +398,7 @@ public:
 
         for (size_t i = 0; i < argList.size(); ++i) {
             dsc.arguments[i] = argList[i].getDescriptor();
+            _setTree(argList[i].getTree());
         }
 
         int status = MdsCopyDxXd((mdsdsc_t *)&dsc, &_xd);
@@ -370,6 +408,11 @@ public:
     }
 
     Data call() const;
+
+    template <typename ResultType = Data>
+    inline ResultType getData() const {
+        return call().releaseAndConvert<ResultType>();
+    }
 
 }; // class Function
 
@@ -396,6 +439,10 @@ public:
         DataView argBegin(begin);
         DataView argEnding(ending);
         DataView argDelta(delta);
+
+        _setTree(argBegin.getTree());
+        _setTree(argEnding.getTree());
+        _setTree(argDelta.getTree());
 
         DESCRIPTOR_RANGE(dsc,
             argBegin.getDescriptor(),
@@ -452,6 +499,9 @@ public:
         DataView argValue(value);
         DataView argUnits(units);
 
+        _setTree(argValue.getTree());
+        _setTree(argUnits.getTree());
+
         DESCRIPTOR_WITH_UNITS(dsc,
             argValue.getDescriptor(),
             argUnits.getDescriptor()
@@ -492,6 +542,9 @@ public:
     {
         DataView argValue(value);
         DataView argError(error);
+
+        _setTree(argValue.getTree());
+        _setTree(argError.getTree());
 
         DESCRIPTOR_WITH_ERROR(dsc,
             argValue.getDescriptor(),

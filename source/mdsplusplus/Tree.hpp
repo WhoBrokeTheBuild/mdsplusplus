@@ -44,7 +44,7 @@ public:
             throwException(status);
         }
 
-        return Tree(name, shot, TreeDbid());
+        return Tree(std::string(name, retNameLength), shot, TreeDbid());
     }
 
     inline void setActive() {
@@ -88,12 +88,14 @@ public:
 
     [[nodiscard]]
     inline std::string getTreeName() const {
-        return _treename;
+        // Return _treename?
+        return _getStringDBI(DbiNAME, 64);
     }
 
     [[nodiscard]]
     inline int getShot() const {
-        return _shot;
+        // Return _shot?
+        return _getDBI<int>(DbiSHOTID);
     }
 
     [[nodiscard]]
@@ -117,6 +119,62 @@ public:
     void close();
 
     void write();
+
+    std::vector<std::string> findTagWild(const std::string& wildcard) const;
+
+    inline std::vector<std::string> getTags() const override {
+        return findTagWild("*");
+    }
+
+    bool isOpen() const {
+        return _open;
+    }
+
+    bool isOpenForEdit() const {
+        return _getDBI<int>(DbiOPEN_FOR_EDIT);
+    }
+
+    bool isModified() const {
+        return _getDBI<int>(DbiMODIFIED);
+    }
+
+    bool isOpenReadOnly() const {
+        return _getDBI<int>(DbiOPEN_READONLY);
+    }
+
+    void setReadOnly() {
+        if (_open) {
+            _setDBI(DbiREADONLY, true);
+
+            if (_mode != Mode::View) {
+                _mode = Mode::ReadOnly;
+            }
+        }
+    }
+
+    bool isVersionsInModelEnabled() const {
+        return _getDBI<int>(DbiVERSIONS_IN_MODEL);
+    }
+
+    void setVersionsInModelEnabled(bool enabled) const {
+        _setDBI(DbiVERSIONS_IN_MODEL, enabled);
+    }
+
+    bool isVersionsInPulseEnabled() const {
+        return _getDBI<int>(DbiVERSIONS_IN_PULSE);
+    }
+
+    void setVersionsInPulseEnabled(bool enabled) const {
+        _setDBI(DbiVERSIONS_IN_PULSE, enabled);
+    }
+
+    bool isAlternateCompressionEnabled() const {
+        return _getDBI<int>(DbiALTERNATE_COMPRESSION);
+    }
+
+    void setAlternateCompressionEnabled(bool enabled) const {
+        _setDBI(DbiALTERNATE_COMPRESSION, enabled);
+    }
 
     inline void setDefaultNode(const std::string& path) const {
         setDefaultNode(getNode(path));
@@ -143,6 +201,13 @@ private:
     int _shot;
 
     Mode _mode = Mode::Normal;
+
+    template <typename ResultType>
+    ResultType _getDBI(int16_t code) const;
+
+    std::string _getStringDBI(int16_t code, int16_t size) const;
+
+    void _setDBI(int16_t code, int value) const;
 
 };
 

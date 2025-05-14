@@ -224,6 +224,49 @@ inline std::string TreeNode::getNodeName() const
     return name;
 }
 
+template <typename ValueType>
+inline void TreeNode::setExtendedAttribute(const std::string& name, ValueType value) const
+{
+    DataView argValue(value);
+    int status = _TreeSetXNci(getDBID(), _nid, name.c_str(), argValue.getDescriptor());
+    if (IS_NOT_OK(status)) {
+        throwException(status);
+    }
+}
+
+template <typename ResultType /*= Data*/>
+ResultType TreeNode::getExtendedAttribute(const std::string& name)
+{
+    mdsdsc_xd_t out = MDSDSC_XD_INITIALIZER;
+    int status = _TreeGetXNci(getDBID(), _nid, name.c_str(), &out);
+    if (IS_NOT_OK(status)) {
+        throwException(status);
+    }
+
+    return Data(std::move(out), getTree()).releaseAndConvert<ResultType>();
+}
+
+inline std::vector<std::string> TreeNode::getTags() const
+{
+    std::vector<std::string> tags;
+
+    int outnid = _nid;
+    void * findContext = nullptr;
+    while (true)
+    {
+        char * tag = _TreeFindNodeTags(getDBID(), _nid, &findContext);
+        if (!tag) {
+            break;
+        }
+
+        tags.push_back("\\" + std::string(tag));
+    }
+
+    TreeFindTagEnd(&findContext);
+
+    return tags;
+}
+
 inline Data TreeNode::getRecord() const
 {
     mdsdsc_xd_t xd = MDSDSC_XD_INITIALIZER;
@@ -324,7 +367,7 @@ inline std::string TreeNode::_getStringNCI(nci_t code, int16_t size) const
         throwException(status);
     }
 
-    buffer.shrink_to_fit();
+    buffer.resize(retlen);
 
     return buffer;
 }
