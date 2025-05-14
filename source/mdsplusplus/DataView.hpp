@@ -67,19 +67,19 @@ public:
             .length = 0,
             .dtype = DTYPE_DSC,
             .class_ = CLASS_S,
-            .pointer = (char *)value.getDescriptor(),
+            .pointer = const_cast<char *>(reinterpret_cast<const char *>(value.getDescriptor())),
         })
         , _tree(value.getTree())
     { }
 
     template <typename CType,
         typename std::enable_if<is_valid_ctype<CType>::value, bool>::type = true>
-    inline DataView(const std::vector<CType> &value)
+    inline DataView(const std::vector<CType> &values)
         : _dsc(mdsdsc_a_t{
             .length = sizeof(CType),
             .dtype = _getDTypeForCType<CType>(),
             .class_ = CLASS_S,
-            .pointer = value.data(),
+            .pointer = const_cast<char *>(reinterpret_cast<const char *>(values.data())),
             .scale = 0,
             .digits = 0,
             .aflags = aflags_t{
@@ -90,7 +90,7 @@ public:
                 .bounds = false,
             },
             .dimct = 0,
-            .arsize = value.size() * sizeof(CType),
+            .arsize = values.size() * sizeof(CType),
         })
     { }
 
@@ -98,12 +98,12 @@ public:
 
         template <typename CType,
             typename std::enable_if<is_valid_ctype<CType>::value, bool>::type = true>
-        inline DataView(std::span<const CType> value)
+        inline DataView(std::span<const CType> values)
             : _dsc(mdsdsc_a_t{
                 .length = sizeof(CType),
                 .dtype = _getDTypeForCType<CType>(),
                 .class_ = CLASS_S,
-                .pointer = value.data(),
+                .pointer = const_cast<char *>(reinterpret_cast<const char *>(values.data())),
                 .scale = 0,
                 .digits = 0,
                 .aflags = aflags_t{
@@ -114,7 +114,7 @@ public:
                     .bounds = false,
                 },
                 .dimct = 0,
-                .arsize = value.size() * sizeof(CType),
+                .arsize = values.size() * sizeof(CType),
             })
         { }
         
@@ -127,7 +127,7 @@ public:
             .length = sizeof(CType),
             .dtype = _getDTypeForCType<CType>(),
             .class_ = CLASS_S,
-            .pointer = (char *)&value,
+            .pointer = const_cast<char *>(reinterpret_cast<const char *>(&value)),
         })
     { }
 
