@@ -90,7 +90,7 @@ public:
                 .bounds = false,
             },
             .dimct = 0,
-            .arsize = values.size() * sizeof(CType),
+            .arsize = arsize_t(values.size() * sizeof(CType)),
         })
     { }
 
@@ -114,7 +114,7 @@ public:
                     .bounds = false,
                 },
                 .dimct = 0,
-                .arsize = values.size() * sizeof(CType),
+                .arsize = arsize_t(values.size() * sizeof(CType)),
             })
         { }
         
