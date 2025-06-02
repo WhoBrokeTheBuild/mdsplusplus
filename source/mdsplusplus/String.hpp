@@ -47,6 +47,11 @@ public:
     inline String clone() const {
         return _clone<String>();
     }
+
+    [[nodiscard]]
+    inline String * cloneNew() const {
+        return _cloneNew<String>();
+    }
     
     inline std::string getValue() const {
         return getString();
@@ -194,6 +199,11 @@ public:
     [[nodiscard]]
     inline StringArray clone() const {
         return _clone<StringArray>();
+    }
+
+    [[nodiscard]]
+    inline StringArray * cloneNew() const {
+        return _cloneNew<StringArray>();
     }
 
     [[nodiscard]]

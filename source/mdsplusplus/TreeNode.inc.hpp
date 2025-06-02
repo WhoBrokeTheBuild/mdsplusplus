@@ -179,7 +179,7 @@ inline TreeNode TreeNode::getNode(const std::string& path) const
 {
     int nid = 0;
 
-    int status = _TreeFindNodeRelative(getTree()->getDBID(), path.data(), _nid, &nid);
+    int status = _TreeFindNodeRelative(getDBID(), path.data(), _nid, &nid);
     if (IS_NOT_OK(status)) {
         throwException(status);
     }
@@ -187,11 +187,51 @@ inline TreeNode TreeNode::getNode(const std::string& path) const
     return TreeNode(_tree, nid);
 }
 
+inline std::vector<TreeNode> TreeNode::findNodeWild(const std::string& wildcard, std::vector<Usage> validUsages /*= {}*/) const
+{
+    std::vector<TreeNode> nodes;
+
+    int usageMask = 0xFFFF;
+    if (!validUsages.empty()) {
+        usageMask = 0;
+        for (const auto& usage : validUsages) {
+            usageMask |= 1 << int(usage);
+        }
+    }
+
+    void * findContext = nullptr;
+    while (true)
+    {
+        int outnid;
+        int status = _TreeFindNodeWildRelative(
+            getDBID(),
+            wildcard.c_str(),
+            _nid,
+            &outnid,
+            &findContext,
+            usageMask
+        );
+        if (status == TreeNMN || status == TreeNNF) {
+            break;
+        }
+        else if (IS_NOT_OK(status)) {
+            throwException(status);
+        }
+
+        nodes.push_back(TreeNode(getTree(), outnid));
+    }
+
+    _TreeFindNodeEnd(getDBID(), &findContext);
+
+    return nodes;
+}
+
+
 inline TreeNode TreeNode::addNode(const std::string& path, Usage usage) const
 {
     int nid = 0;
 
-    int status = _TreeAddNode(getTree()->getDBID(), path.data(), &nid, static_cast<unsigned char>(usage));
+    int status = _TreeAddNode(getDBID(), path.data(), &nid, static_cast<unsigned char>(usage));
     if (IS_NOT_OK(status)) {
         throwException(status);
     }
@@ -203,12 +243,40 @@ inline TreeNode TreeNode::addDevice(const std::string& path, const std::string& 
 {
     int nid = 0;
 
-    int status = _TreeAddConglom(getTree()->getDBID(), path.data(), model.data(), &nid);
+    int status = _TreeAddConglom(getDBID(), path.data(), model.data(), &nid);
     if (IS_NOT_OK(status)) {
         throwException(status);
     }
 
     return TreeNode(_tree, nid);
+}
+
+template <typename ResultType /*= Data*/, typename ...ArgTypes>
+ResultType TreeNode::doMethod(const std::string& method, ArgTypes... args)
+{
+    std::vector<DataView> argList = { DataView(args)... };
+
+    std::vector<mdsdsc_t *> dscList;
+    for (const auto& arg : argList) {
+        dscList.push_back(arg.getDescriptor());
+    }
+
+    DESCRIPTOR_NID(dscNID, getNID());
+    DESCRIPTOR_FROM_CSTRING(dscMethod, method.c_str());
+    mdsdsc_xd_t out = MDSDSC_XD_INITIALIZER;
+    int status = _TreeDoMethodA(
+        getDBID(),
+        &dscNID,
+        &dscMethod,
+        dscList.size(),
+        dscList.data(),
+        &out
+    );
+    if (IS_NOT_OK(status)) {
+        throwException(status);
+    }
+
+    return Data(std::move(out), getTree()).releaseAndConvert<ResultType>();
 }
 
 inline std::string TreeNode::getNodeName() const
@@ -246,6 +314,14 @@ ResultType TreeNode::getExtendedAttribute(const std::string& name)
     return Data(std::move(out), getTree()).releaseAndConvert<ResultType>();
 }
 
+inline void TreeNode::addTag(const std::string& tag)
+{
+    int status = _TreeAddTag(getDBID(), _nid, tag.c_str());
+    if (IS_NOT_OK(status)) {
+        throwException(status);
+    }
+}
+
 inline std::vector<std::string> TreeNode::getTags() const
 {
     std::vector<std::string> tags;
@@ -270,7 +346,7 @@ inline std::vector<std::string> TreeNode::getTags() const
 inline Data TreeNode::getRecord() const
 {
     mdsdsc_xd_t xd = MDSDSC_XD_INITIALIZER;
-    int status = _TreeGetRecord(getTree()->getDBID(), _nid, &xd);
+    int status = _TreeGetRecord(getDBID(), _nid, &xd);
     if (IS_NOT_OK(status)) {
         throwException(status);
     }
@@ -282,7 +358,7 @@ inline Data TreeNode::getRecord() const
 inline void TreeNode::putRecord(const Data& data) const
 {
     mdsdsc_t * dsc = data.getDescriptor();
-    int status = _TreePutRecord(getTree()->getDBID(), _nid, dsc, 0);
+    int status = _TreePutRecord(getDBID(), _nid, dsc, 0);
     if (IS_NOT_OK(status)) {
         throwException(status);
     }
@@ -300,7 +376,7 @@ inline std::vector<TreeNode> TreeNode::getMembersAndChildren(bool sortedNIDs /*=
         { 0, NciEND_OF_LIST, nullptr, nullptr },
     };
 
-    status = _TreeGetNci(getTree()->getDBID(), _nid, countItemList);
+    status = _TreeGetNci(getDBID(), _nid, countItemList);
     if (IS_NOT_OK(status)) {
         throwException(status);
     }
@@ -315,7 +391,7 @@ inline std::vector<TreeNode> TreeNode::getMembersAndChildren(bool sortedNIDs /*=
         { 0, NciEND_OF_LIST, nullptr, nullptr },
     };
 
-    status = _TreeGetNci(getTree()->getDBID(), _nid, itemList);
+    status = _TreeGetNci(getDBID(), _nid, itemList);
     if (IS_NOT_OK(status)) {
         throwException(status);
     }
@@ -362,7 +438,7 @@ inline std::string TreeNode::_getStringNCI(nci_t code, int16_t size) const
         { 0, NciEND_OF_LIST, nullptr, nullptr },
     };
 
-    int status = _TreeGetNci(getTree()->getDBID(), _nid, itemList);
+    int status = _TreeGetNci(getDBID(), _nid, itemList);
     if (IS_NOT_OK(status)) {
         throwException(status);
     }
@@ -383,7 +459,7 @@ inline std::vector<int> TreeNode::_getNIDArrayNCI(nci_t code, nci_t codeForNumbe
         { 0, NciEND_OF_LIST, nullptr, nullptr },
     };
 
-    int status = _TreeGetNci(getTree()->getDBID(), _nid, itemList);
+    int status = _TreeGetNci(getDBID(), _nid, itemList);
     if (IS_NOT_OK(status)) {
         throwException(status);
     }
@@ -411,7 +487,7 @@ void TreeNode::putRow(int segmentLength, ValueType value, int64_t timestamp)
     DataView argValue(value);
 
     int status = _TreePutRow(
-        getTree()->getDBID(),
+        getDBID(),
         getNID(),
         segmentLength,
         &timestamp,
@@ -428,7 +504,7 @@ void TreeNode::putSegment(ValueArrayType values, int index /*= -1*/)
     DataView argValues(values);
 
     int status = _TreePutSegment(
-        getTree()->getDBID(),
+        getDBID(),
         getNID(),
         index,
         (mdsdsc_a_t *)argValues.getDescriptor()
@@ -444,7 +520,7 @@ void TreeNode::putTimestampedSegment(int64_t * timestamps, ValueArrayType values
     DataView argValues(values);
 
     int status = _TreePutTimestampedSegment(
-        getTree()->getDBID(),
+        getDBID(),
         getNID(),
         timestamps,
         (mdsdsc_a_t *)argValues.getDescriptor()
@@ -514,7 +590,7 @@ void TreeNode::makeSegment(
     }
 
     int status = _TreeMakeSegment(
-        getTree()->getDBID(),
+        getDBID(),
         getNID(),
         argStartIndex.getDescriptor(),
         argEndIndex.getDescriptor(),
@@ -556,7 +632,7 @@ void TreeNode::makeSegmentResampled(
     }
 
     int status = _TreeMakeSegmentResampled(
-        getTree()->getDBID(),
+        getDBID(),
         getNID(),
         argStartIndex.getDescriptor(),
         argEndIndex.getDescriptor(),
@@ -600,7 +676,7 @@ void TreeNode::makeSegmentResampled(
 //     }
 
 //     int status = _TreeMakeSegmentMinMax(
-//         getTree()->getDBID(),
+//         getDBID(),
 //         getNID(),
 //         argStartIndex.getDescriptor(),
 //         argEndIndex.getDescriptor(),
@@ -632,7 +708,7 @@ void TreeNode::makeTimestampedSegment(
     }
 
     int status = _TreeMakeTimestampedSegment(
-        getTree()->getDBID(),
+        getDBID(),
         getNID(),
         timestamps,
         dscValues,

@@ -120,6 +120,10 @@ public:
 
     void write();
 
+    void createPulse(int shot) const;
+
+    // std::vector<TreeNode> findNodeWild(const std::string& wildcard) const;
+
     std::vector<std::string> findTagWild(const std::string& wildcard) const;
 
     inline std::vector<std::string> getTags() const override {

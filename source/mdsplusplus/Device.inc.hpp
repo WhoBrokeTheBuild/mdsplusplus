@@ -12,13 +12,13 @@ inline void Device::addParts(std::vector<DevicePart>&& parts) const
 
     for (const auto& part : parts)
     {
-        printf("Adding %s\n", part.Path.c_str());
+        printf("Adding %s (%s)\n", part.Path.c_str(), to_string(part.Usage).c_str());
         auto node = addNode(part.Path, part.Usage);
         
         if (!part.ValueExpression.empty()) {
             node.putRecord(getTree()->compileData(part.ValueExpression));
         }
-        else {
+        else if (part.Value) {
             node.putRecord(*part.Value);
         }
 

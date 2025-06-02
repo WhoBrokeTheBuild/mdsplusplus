@@ -29,7 +29,6 @@
 #include <cstring>
 #include <functional>
 #include <map>
-#include <set>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -3284,6 +3283,11 @@ public:
         return _clone<Data>();
     }
 
+    [[nodiscard]]
+    inline Data * cloneNew() const {
+        return _cloneNew<Data>();
+    }
+
     template <typename ResultType>
     [[nodiscard]]
     inline ResultType convert() const {
@@ -3521,7 +3525,26 @@ public:
     template <typename DataType,
         typename std::enable_if<std::is_base_of<Data, DataType>::value, bool>::type = true>
     inline bool operator!=(const DataType& other) const {
-        return !(*this == other);
+        // TODO: What if other has a tree?
+        if (getTree() != nullptr && other.getTree() != nullptr && getTree() != other.getTree()) {
+            return true;
+        }
+
+        bool notEqual = false;
+        mdsdsc_s_t out = {
+            .length = 1,
+            .dtype = DTYPE_BU,
+            .class_ = CLASS_S,
+            .pointer = (char *)&notEqual
+        };
+
+        mdsdsc_t * args[] = { getDescriptor(), other.getDescriptor() };
+        int status = _intrinsic(OPC_NE, 2, args, (mdsdsc_xd_t *)&out);
+        if (IS_NOT_OK(status)) {
+            throwException(status);
+        }
+
+        return notEqual;
     }
 
     template <typename DataType>
@@ -3551,6 +3574,17 @@ protected:
         }
 
         return ResultType(std::move(xd), getTree());
+    }
+
+    template <typename ResultType>
+    inline ResultType * _cloneNew() const {
+        mdsdsc_xd_t xd = MDSDSC_XD_INITIALIZER;
+        int status = MdsCopyDxXd(getDescriptor(), &xd);
+        if (IS_NOT_OK(status)) {
+            throwException(status);
+        }
+
+        return new ResultType(std::move(xd), getTree());
     }
 
     template <typename ResultType>
@@ -3663,9 +3697,14 @@ public:
 
     TreeNode getNode(const std::string& path) const;
 
+    std::vector<TreeNode> findNodeWild(const std::string& wildcard, std::vector<Usage> validUsages = {}) const;
+
     TreeNode addNode(const std::string& path, Usage usage) const;
 
     TreeNode addDevice(const std::string& path, const std::string& model) const;
+
+    template <typename ResultType = Data, typename ...ArgTypes>
+    ResultType doMethod(const std::string& method, ArgTypes... args);
 
     [[nodiscard]]
     inline uint64_t getTimeInserted() const {
@@ -3942,6 +3981,8 @@ public:
 
     template <typename ResultType = Data>
     ResultType getExtendedAttribute(const std::string& name);
+
+    void addTag(const std::string& tag);
 
     virtual std::vector<std::string> getTags() const;
 
@@ -4314,6 +4355,10 @@ public:
 
     void write();
 
+    void createPulse(int shot) const;
+
+    // std::vector<TreeNode> findNodeWild(const std::string& wildcard) const;
+
     std::vector<std::string> findTagWild(const std::string& wildcard) const;
 
     inline std::vector<std::string> getTags() const override {
@@ -4460,19 +4505,19 @@ public:
             .length = 0,
             .dtype = DTYPE_DSC,
             .class_ = CLASS_S,
-            .pointer = (char *)value.getDescriptor(),
+            .pointer = const_cast<char *>(reinterpret_cast<const char *>(value.getDescriptor())),
         })
         , _tree(value.getTree())
     { }
 
     template <typename CType,
         typename std::enable_if<is_valid_ctype<CType>::value, bool>::type = true>
-    inline DataView(const std::vector<CType> &value)
+    inline DataView(const std::vector<CType> &values)
         : _dsc(mdsdsc_a_t{
             .length = sizeof(CType),
             .dtype = _getDTypeForCType<CType>(),
             .class_ = CLASS_S,
-            .pointer = value.data(),
+            .pointer = const_cast<char *>(reinterpret_cast<const char *>(values.data())),
             .scale = 0,
             .digits = 0,
             .aflags = aflags_t{
@@ -4483,7 +4528,7 @@ public:
                 .bounds = false,
             },
             .dimct = 0,
-            .arsize = value.size() * sizeof(CType),
+            .arsize = arsize_t(values.size() * sizeof(CType)),
         })
     { }
 
@@ -4491,12 +4536,12 @@ public:
 
         template <typename CType,
             typename std::enable_if<is_valid_ctype<CType>::value, bool>::type = true>
-        inline DataView(std::span<const CType> value)
+        inline DataView(std::span<const CType> values)
             : _dsc(mdsdsc_a_t{
                 .length = sizeof(CType),
                 .dtype = _getDTypeForCType<CType>(),
                 .class_ = CLASS_S,
-                .pointer = value.data(),
+                .pointer = const_cast<char *>(reinterpret_cast<const char *>(values.data())),
                 .scale = 0,
                 .digits = 0,
                 .aflags = aflags_t{
@@ -4507,7 +4552,7 @@ public:
                     .bounds = false,
                 },
                 .dimct = 0,
-                .arsize = value.size() * sizeof(CType),
+                .arsize = arsize_t(values.size() * sizeof(CType)),
             })
         { }
 
@@ -4520,7 +4565,7 @@ public:
             .length = sizeof(CType),
             .dtype = _getDTypeForCType<CType>(),
             .class_ = CLASS_S,
-            .pointer = (char *)&value,
+            .pointer = const_cast<char *>(reinterpret_cast<const char *>(&value)),
         })
     { }
 
@@ -4657,6 +4702,11 @@ public:
     [[nodiscard]]
     inline String clone() const {
         return _clone<String>();
+    }
+
+    [[nodiscard]]
+    inline String * cloneNew() const {
+        return _cloneNew<String>();
     }
 
     inline std::string getValue() const {
@@ -4805,6 +4855,11 @@ public:
     [[nodiscard]]
     inline StringArray clone() const {
         return _clone<StringArray>();
+    }
+
+    [[nodiscard]]
+    inline StringArray * cloneNew() const {
+        return _cloneNew<StringArray>();
     }
 
     [[nodiscard]]
@@ -5018,6 +5073,11 @@ public:
     }
 
     [[nodiscard]]
+    inline Int8 * cloneNew() const {
+        return _cloneNew<Int8>();
+    }
+
+    [[nodiscard]]
     inline __ctype getValue() const {
         return _getValue<__ctype>();
     }
@@ -5074,6 +5134,11 @@ public:
     [[nodiscard]]
     inline UInt8 clone() const {
         return _clone<UInt8>();
+    }
+
+    [[nodiscard]]
+    inline UInt8 * cloneNew() const {
+        return _cloneNew<UInt8>();
     }
 
     [[nodiscard]]
@@ -5136,6 +5201,11 @@ public:
     }
 
     [[nodiscard]]
+    inline Int16 * cloneNew() const {
+        return _cloneNew<Int16>();
+    }
+
+    [[nodiscard]]
     inline __ctype getValue() const {
         return _getValue<__ctype>();
     }
@@ -5192,6 +5262,11 @@ public:
     [[nodiscard]]
     inline UInt16 clone() const {
         return _clone<UInt16>();
+    }
+
+    [[nodiscard]]
+    inline UInt16 * cloneNew() const {
+        return _cloneNew<UInt16>();
     }
 
     [[nodiscard]]
@@ -5254,6 +5329,11 @@ public:
     }
 
     [[nodiscard]]
+    inline Int32 * cloneNew() const {
+        return _cloneNew<Int32>();
+    }
+
+    [[nodiscard]]
     inline __ctype getValue() const {
         return _getValue<__ctype>();
     }
@@ -5310,6 +5390,11 @@ public:
     [[nodiscard]]
     inline UInt32 clone() const {
         return _clone<UInt32>();
+    }
+
+    [[nodiscard]]
+    inline UInt32 * cloneNew() const {
+        return _cloneNew<UInt32>();
     }
 
     [[nodiscard]]
@@ -5372,6 +5457,11 @@ public:
     }
 
     [[nodiscard]]
+    inline Int64 * cloneNew() const {
+        return _cloneNew<Int64>();
+    }
+
+    [[nodiscard]]
     inline __ctype getValue() const {
         return _getValue<__ctype>();
     }
@@ -5428,6 +5518,11 @@ public:
     [[nodiscard]]
     inline UInt64 clone() const {
         return _clone<UInt64>();
+    }
+
+    [[nodiscard]]
+    inline UInt64 * cloneNew() const {
+        return _cloneNew<UInt64>();
     }
 
     [[nodiscard]]
@@ -5492,6 +5587,11 @@ public:
     }
 
     [[nodiscard]]
+    inline Float32 * cloneNew() const {
+        return _cloneNew<Float32>();
+    }
+
+    [[nodiscard]]
     inline __ctype getValue() const {
         return _getValue<__ctype>();
     }
@@ -5548,6 +5648,11 @@ public:
     [[nodiscard]]
     inline Float64 clone() const {
         return _clone<Float64>();
+    }
+
+    [[nodiscard]]
+    inline Float64 * cloneNew() const {
+        return _cloneNew<Float64>();
     }
 
     [[nodiscard]]
@@ -5610,6 +5715,11 @@ public:
     }
 
     [[nodiscard]]
+    inline Complex32 * cloneNew() const {
+        return _cloneNew<Complex32>();
+    }
+
+    [[nodiscard]]
     inline __ctype getValue() const {
         return _getValue<__ctype>();
     }
@@ -5666,6 +5776,11 @@ public:
     [[nodiscard]]
     inline Complex64 clone() const {
         return _clone<Complex64>();
+    }
+
+    [[nodiscard]]
+    inline Complex64 * cloneNew() const {
+        return _cloneNew<Complex64>();
     }
 
     [[nodiscard]]
@@ -5856,6 +5971,11 @@ public:
     }
 
     [[nodiscard]]
+    inline Int8Array * cloneNew() const {
+        return _cloneNew<Int8Array>();
+    }
+
+    [[nodiscard]]
     inline std::vector<__ctype> getVector() const {
         return _getVector<__ctype>();
     }
@@ -5990,6 +6110,11 @@ public:
     [[nodiscard]]
     inline UInt8Array clone() const {
         return _clone<UInt8Array>();
+    }
+
+    [[nodiscard]]
+    inline UInt8Array * cloneNew() const {
+        return _cloneNew<UInt8Array>();
     }
 
     [[nodiscard]]
@@ -6130,6 +6255,11 @@ public:
     }
 
     [[nodiscard]]
+    inline Int16Array * cloneNew() const {
+        return _cloneNew<Int16Array>();
+    }
+
+    [[nodiscard]]
     inline std::vector<__ctype> getVector() const {
         return _getVector<__ctype>();
     }
@@ -6260,6 +6390,11 @@ public:
     [[nodiscard]]
     inline UInt16Array clone() const {
         return _clone<UInt16Array>();
+    }
+
+    [[nodiscard]]
+    inline UInt16Array * cloneNew() const {
+        return _cloneNew<UInt16Array>();
     }
 
     [[nodiscard]]
@@ -6396,6 +6531,11 @@ public:
     }
 
     [[nodiscard]]
+    inline Int32Array * cloneNew() const {
+        return _cloneNew<Int32Array>();
+    }
+
+    [[nodiscard]]
     inline std::vector<__ctype> getVector() const {
         return _getVector<__ctype>();
     }
@@ -6526,6 +6666,11 @@ public:
     [[nodiscard]]
     inline UInt32Array clone() const {
         return _clone<UInt32Array>();
+    }
+
+    [[nodiscard]]
+    inline UInt32Array * cloneNew() const {
+        return _cloneNew<UInt32Array>();
     }
 
     [[nodiscard]]
@@ -6662,6 +6807,11 @@ public:
     }
 
     [[nodiscard]]
+    inline Int64Array * cloneNew() const {
+        return _cloneNew<Int64Array>();
+    }
+
+    [[nodiscard]]
     inline std::vector<__ctype> getVector() const {
         return _getVector<__ctype>();
     }
@@ -6792,6 +6942,11 @@ public:
     [[nodiscard]]
     inline UInt64Array clone() const {
         return _clone<UInt64Array>();
+    }
+
+    [[nodiscard]]
+    inline UInt64Array * cloneNew() const {
+        return _cloneNew<UInt64Array>();
     }
 
     [[nodiscard]]
@@ -6928,6 +7083,11 @@ public:
     }
 
     [[nodiscard]]
+    inline Float32Array * cloneNew() const {
+        return _cloneNew<Float32Array>();
+    }
+
+    [[nodiscard]]
     inline std::vector<__ctype> getVector() const {
         return _getVector<__ctype>();
     }
@@ -7058,6 +7218,11 @@ public:
     [[nodiscard]]
     inline Float64Array clone() const {
         return _clone<Float64Array>();
+    }
+
+    [[nodiscard]]
+    inline Float64Array * cloneNew() const {
+        return _cloneNew<Float64Array>();
     }
 
     [[nodiscard]]
@@ -7194,6 +7359,11 @@ public:
     }
 
     [[nodiscard]]
+    inline Complex32Array * cloneNew() const {
+        return _cloneNew<Complex32Array>();
+    }
+
+    [[nodiscard]]
     inline std::vector<__ctype> getVector() const {
         return _getVector<__ctype>();
     }
@@ -7324,6 +7494,11 @@ public:
     [[nodiscard]]
     inline Complex64Array clone() const {
         return _clone<Complex64Array>();
+    }
+
+    [[nodiscard]]
+    inline Complex64Array * cloneNew() const {
+        return _cloneNew<Complex64Array>();
     }
 
     [[nodiscard]]
@@ -7902,6 +8077,11 @@ protected:
     [[nodiscard]]                                                \
     inline RecordType clone() const {                            \
         return _clone<RecordType>();                             \
+    }                                                            \
+                                                                 \
+    [[nodiscard]]                                                \
+    inline RecordType * cloneNew() const {                       \
+        return _cloneNew<RecordType>();                          \
     }
 
 #define MDSPLUS_RECORD_CUSTOMIZATION(RecordType)                 \
@@ -8563,30 +8743,31 @@ public:
     { } \
     virtual ~DeviceClass() = default; \
 
-#define MDSPLUS_DEVICE(LibraryName, DeviceClass, DeviceClassLower)             \
-    extern "C" int DeviceClassLower##__add(                                    \
-        mdsdsc_t * name_dsc,                                                   \
-        mdsdsc_t * dummy_dsc,                                                  \
-        int * nid_ptr)                                                         \
-    {                                                                          \
-        (void)dummy_dsc;                                                       \
-        int head_nid = 0;                                                      \
-        static DESCRIPTOR(library_dsc, LibraryName);                           \
-        static DESCRIPTOR(model_dsc, #DeviceClass);                            \
-        static DESCRIPTOR_CONGLOM(device_dsc, &library_dsc, &model_dsc, 0, 0); \
-        std::vector<mdsplus::DevicePart> parts = DeviceClass::GetParts();      \
-        TreeStartConglomerate(parts.size() + 1);                               \
-        std::string name(name_dsc->pointer, name_dsc->length);                 \
-        TreeAddNode(name.c_str(), &head_nid, TreeUSAGE_DEVICE);                \
-        TreePutRecord(head_nid, (mdsdsc_t *)&device_dsc, 0);                   \
-        Tree tree = mdsplus::Tree::GetActive();                                \
-        DeviceClass device(&tree, head_nid);                                   \
-        device.addParts(std::move(parts));                                     \
-        TreeEndConglomerate();                                                 \
-        if (nid_ptr) {                                                         \
-            *nid_ptr = head_nid;                                               \
-        }                                                                      \
-        return TreeSUCCESS;                                                    \
+#define MDSPLUS_DEVICE(LibraryName, DeviceClass, DeviceClassLower)               \
+    extern "C" int DeviceClassLower##__add(                                      \
+        mdsdsc_t * dscName,                                                      \
+        mdsdsc_t * dscDummy,                                                     \
+        int * nidOut)                                                            \
+    {                                                                            \
+        (void)dscDummy;                                                          \
+        int nidHead = 0;                                                         \
+        static DESCRIPTOR(dscLibrary, LibraryName);                              \
+        static DESCRIPTOR(dscModel, #DeviceClass);                               \
+        mdsdsc_t * dscLibraryPtr = (dscLibrary.pointer ? &dscLibrary : nullptr); \
+        static DESCRIPTOR_CONGLOM(dscConglom, dscLibraryPtr, &dscModel, 0, 0);   \
+        std::vector<mdsplus::DevicePart> parts = DeviceClass::GetParts();        \
+        TreeStartConglomerate(parts.size() + 1);                                 \
+        std::string name(dscName->pointer, dscName->length);                     \
+        TreeAddNode(name.c_str(), &nidHead, TreeUSAGE_DEVICE);                   \
+        TreePutRecord(nidHead, (mdsdsc_t *)&dscConglom, 0);                      \
+        Tree tree = mdsplus::Tree::GetActive();                                  \
+        DeviceClass device(&tree, nidHead);                                      \
+        device.addParts(std::move(parts));                                       \
+        TreeEndConglomerate();                                                   \
+        if (nidOut) {                                                            \
+            *nidOut = nidHead;                                                   \
+        }                                                                        \
+        return TreeSUCCESS;                                                      \
     }
 
 #define MDSPLUS_DEVICE_METHOD(DeviceClassLower, DeviceClass, MethodName) \
@@ -8601,59 +8782,6 @@ public:
         }                                                                \
         return TreeSUCCESS;                                              \
     }
-
-class SineWave : public Device
-{
-public:
-
-    MDSPLUS_DEVICE_BOOTSTRAP(SineWave)
-
-    static std::vector<DevicePart> GetParts() {
-        // std::vector<DevicePart> parts = {
-        //     DevicePart{
-        //         .Path = ":COMMENT",
-        //         .Usage = Usage::Any,
-        //         .Value = new String("Test 123"),
-        //         .Flags = {
-        //             .WriteOnce = true,
-        //             .NoWriteShot = true,
-        //         },
-        //         .XNCI = {
-        //             { "tooltip", new String("A comment") },
-        //         }
-        //     },
-        //     DevicePart{
-        //         .Path = ":FREQUENCY",
-        //         .Usage = Usage::Numeric,
-        //         .Value = new WithUnits(1000.0f, "Hz"),
-        //         .Flags = {
-        //             .NoWriteShot = true,
-        //         },
-        //         .Callback = [](TreeNode& node) {
-        //             node.setFlagsOn(TreeNodeFlags{
-        //                 .Cached = true,
-        //             });
-        //             // node.setExtendedAttribute("tooltip", "The Frequency in Hz");
-        //         },
-        //         // .XNCI = {
-        //         //     { "tooltip", String("The Frequency in Hz") },
-        //         // }
-        //     }
-        // };
-
-        // for (int i = 0; i < 32; ++i) {
-        //     std::string path = ":INPUTS:INPUT_" + std::to_string(i);
-        //     // parts.push_back(DevicePart{
-        //     //     .Path = path,
-        //     //     // ...
-        //     // });
-        // }
-
-        // return parts;
-        return {};
-    }
-
-};
 
 inline std::string to_string(const Class& class_)
 {
@@ -9530,7 +9658,7 @@ inline TreeNode TreeNode::getNode(const std::string& path) const
 {
     int nid = 0;
 
-    int status = _TreeFindNodeRelative(getTree()->getDBID(), path.data(), _nid, &nid);
+    int status = _TreeFindNodeRelative(getDBID(), path.data(), _nid, &nid);
     if (IS_NOT_OK(status)) {
         throwException(status);
     }
@@ -9538,11 +9666,50 @@ inline TreeNode TreeNode::getNode(const std::string& path) const
     return TreeNode(_tree, nid);
 }
 
+inline std::vector<TreeNode> TreeNode::findNodeWild(const std::string& wildcard, std::vector<Usage> validUsages /*= {}*/) const
+{
+    std::vector<TreeNode> nodes;
+
+    int usageMask = 0xFFFF;
+    if (!validUsages.empty()) {
+        usageMask = 0;
+        for (const auto& usage : validUsages) {
+            usageMask |= 1 << int(usage);
+        }
+    }
+
+    void * findContext = nullptr;
+    while (true)
+    {
+        int outnid;
+        int status = _TreeFindNodeWildRelative(
+            getDBID(),
+            wildcard.c_str(),
+            _nid,
+            &outnid,
+            &findContext,
+            usageMask
+        );
+        if (status == TreeNMN || status == TreeNNF) {
+            break;
+        }
+        else if (IS_NOT_OK(status)) {
+            throwException(status);
+        }
+
+        nodes.push_back(TreeNode(getTree(), outnid));
+    }
+
+    _TreeFindNodeEnd(getDBID(), &findContext);
+
+    return nodes;
+}
+
 inline TreeNode TreeNode::addNode(const std::string& path, Usage usage) const
 {
     int nid = 0;
 
-    int status = _TreeAddNode(getTree()->getDBID(), path.data(), &nid, static_cast<unsigned char>(usage));
+    int status = _TreeAddNode(getDBID(), path.data(), &nid, static_cast<unsigned char>(usage));
     if (IS_NOT_OK(status)) {
         throwException(status);
     }
@@ -9554,12 +9721,40 @@ inline TreeNode TreeNode::addDevice(const std::string& path, const std::string& 
 {
     int nid = 0;
 
-    int status = _TreeAddConglom(getTree()->getDBID(), path.data(), model.data(), &nid);
+    int status = _TreeAddConglom(getDBID(), path.data(), model.data(), &nid);
     if (IS_NOT_OK(status)) {
         throwException(status);
     }
 
     return TreeNode(_tree, nid);
+}
+
+template <typename ResultType /*= Data*/, typename ...ArgTypes>
+ResultType TreeNode::doMethod(const std::string& method, ArgTypes... args)
+{
+    std::vector<DataView> argList = { DataView(args)... };
+
+    std::vector<mdsdsc_t *> dscList;
+    for (const auto& arg : argList) {
+        dscList.push_back(arg.getDescriptor());
+    }
+
+    DESCRIPTOR_NID(dscNID, &_nid);
+    DESCRIPTOR_FROM_CSTRING(dscMethod, method.c_str());
+    mdsdsc_xd_t out = MDSDSC_XD_INITIALIZER;
+    int status = _TreeDoMethodA(
+        getDBID(),
+        &dscNID,
+        &dscMethod,
+        dscList.size(),
+        dscList.data(),
+        &out
+    );
+    if (IS_NOT_OK(status)) {
+        throwException(status);
+    }
+
+    return Data(std::move(out), getTree()).releaseAndConvert<ResultType>();
 }
 
 inline std::string TreeNode::getNodeName() const
@@ -9597,6 +9792,14 @@ ResultType TreeNode::getExtendedAttribute(const std::string& name)
     return Data(std::move(out), getTree()).releaseAndConvert<ResultType>();
 }
 
+inline void TreeNode::addTag(const std::string& tag)
+{
+    int status = _TreeAddTag(getDBID(), _nid, tag.c_str());
+    if (IS_NOT_OK(status)) {
+        throwException(status);
+    }
+}
+
 inline std::vector<std::string> TreeNode::getTags() const
 {
     std::vector<std::string> tags;
@@ -9621,7 +9824,7 @@ inline std::vector<std::string> TreeNode::getTags() const
 inline Data TreeNode::getRecord() const
 {
     mdsdsc_xd_t xd = MDSDSC_XD_INITIALIZER;
-    int status = _TreeGetRecord(getTree()->getDBID(), _nid, &xd);
+    int status = _TreeGetRecord(getDBID(), _nid, &xd);
     if (IS_NOT_OK(status)) {
         throwException(status);
     }
@@ -9633,7 +9836,7 @@ inline Data TreeNode::getRecord() const
 inline void TreeNode::putRecord(const Data& data) const
 {
     mdsdsc_t * dsc = data.getDescriptor();
-    int status = _TreePutRecord(getTree()->getDBID(), _nid, dsc, 0);
+    int status = _TreePutRecord(getDBID(), _nid, dsc, 0);
     if (IS_NOT_OK(status)) {
         throwException(status);
     }
@@ -9651,7 +9854,7 @@ inline std::vector<TreeNode> TreeNode::getMembersAndChildren(bool sortedNIDs /*=
         { 0, NciEND_OF_LIST, nullptr, nullptr },
     };
 
-    status = _TreeGetNci(getTree()->getDBID(), _nid, countItemList);
+    status = _TreeGetNci(getDBID(), _nid, countItemList);
     if (IS_NOT_OK(status)) {
         throwException(status);
     }
@@ -9666,7 +9869,7 @@ inline std::vector<TreeNode> TreeNode::getMembersAndChildren(bool sortedNIDs /*=
         { 0, NciEND_OF_LIST, nullptr, nullptr },
     };
 
-    status = _TreeGetNci(getTree()->getDBID(), _nid, itemList);
+    status = _TreeGetNci(getDBID(), _nid, itemList);
     if (IS_NOT_OK(status)) {
         throwException(status);
     }
@@ -9713,7 +9916,7 @@ inline std::string TreeNode::_getStringNCI(nci_t code, int16_t size) const
         { 0, NciEND_OF_LIST, nullptr, nullptr },
     };
 
-    int status = _TreeGetNci(getTree()->getDBID(), _nid, itemList);
+    int status = _TreeGetNci(getDBID(), _nid, itemList);
     if (IS_NOT_OK(status)) {
         throwException(status);
     }
@@ -9734,7 +9937,7 @@ inline std::vector<int> TreeNode::_getNIDArrayNCI(nci_t code, nci_t codeForNumbe
         { 0, NciEND_OF_LIST, nullptr, nullptr },
     };
 
-    int status = _TreeGetNci(getTree()->getDBID(), _nid, itemList);
+    int status = _TreeGetNci(getDBID(), _nid, itemList);
     if (IS_NOT_OK(status)) {
         throwException(status);
     }
@@ -9762,7 +9965,7 @@ void TreeNode::putRow(int segmentLength, ValueType value, int64_t timestamp)
     DataView argValue(value);
 
     int status = _TreePutRow(
-        getTree()->getDBID(),
+        getDBID(),
         getNID(),
         segmentLength,
         &timestamp,
@@ -9779,7 +9982,7 @@ void TreeNode::putSegment(ValueArrayType values, int index /*= -1*/)
     DataView argValues(values);
 
     int status = _TreePutSegment(
-        getTree()->getDBID(),
+        getDBID(),
         getNID(),
         index,
         (mdsdsc_a_t *)argValues.getDescriptor()
@@ -9795,7 +9998,7 @@ void TreeNode::putTimestampedSegment(int64_t * timestamps, ValueArrayType values
     DataView argValues(values);
 
     int status = _TreePutTimestampedSegment(
-        getTree()->getDBID(),
+        getDBID(),
         getNID(),
         timestamps,
         (mdsdsc_a_t *)argValues.getDescriptor()
@@ -9865,7 +10068,7 @@ void TreeNode::makeSegment(
     }
 
     int status = _TreeMakeSegment(
-        getTree()->getDBID(),
+        getDBID(),
         getNID(),
         argStartIndex.getDescriptor(),
         argEndIndex.getDescriptor(),
@@ -9907,7 +10110,7 @@ void TreeNode::makeSegmentResampled(
     }
 
     int status = _TreeMakeSegmentResampled(
-        getTree()->getDBID(),
+        getDBID(),
         getNID(),
         argStartIndex.getDescriptor(),
         argEndIndex.getDescriptor(),
@@ -9951,7 +10154,7 @@ void TreeNode::makeSegmentResampled(
 //     }
 
 //     int status = _TreeMakeSegmentMinMax(
-//         getTree()->getDBID(),
+//         getDBID(),
 //         getNID(),
 //         argStartIndex.getDescriptor(),
 //         argEndIndex.getDescriptor(),
@@ -9983,7 +10186,7 @@ void TreeNode::makeTimestampedSegment(
     }
 
     int status = _TreeMakeTimestampedSegment(
-        getTree()->getDBID(),
+        getDBID(),
         getNID(),
         timestamps,
         dscValues,
@@ -10032,8 +10235,8 @@ inline void Tree::open()
 
 inline void Tree::close()
 {
-    int status = _TreeClose(&_dbid, _treename.c_str(), _shot);
-    if (IS_NOT_OK(status)) {
+    int status = _TreeClose(&_dbid, nullptr, 0);
+    if (IS_NOT_OK(status) && status != TreeNOT_OPEN) {
         throwException(status);
     }
 
@@ -10046,17 +10249,60 @@ inline void Tree::close()
 
 inline void Tree::write()
 {
-    int status = _TreeWriteTree(&_dbid, _treename.c_str(), _shot);
+    int status = _TreeWriteTree(&_dbid, nullptr, 0);
     if (IS_NOT_OK(status)) {
         throwException(status);
     }
 }
 
+inline void Tree::createPulse(int shot) const
+{
+    // TODO: copy_only_this ?
+
+    int nid = getNID();
+    int status = _TreeCreatePulseFile(getDBID(), shot, 0, &nid);
+    if (IS_NOT_OK(status)) {
+        throwException(status);
+    }
+}
+
+// inline std::vector<TreeNode> Tree::findNodeWild(const std::string& wildcard) const
+// {
+//     std::vector<TreeNode> nodes;
+
+//     int usageMask = 0xFFFF;
+
+//     void * findContext = nullptr;
+//     while (true)
+//     {
+//         int outnid;
+//         int status = _TreeFindNodeWild(
+//             getDBID(),
+//             wildcard.c_str(),
+//             &outnid,
+//             &findContext,
+//             usageMask
+//         );
+//         if (status == TreeNMN || status == TreeNNF) {
+//             break;
+//         }
+//         else if (IS_NOT_OK(status)) {
+//             throwException(status);
+//         }
+
+//         nodes.push_back(TreeNode(getTree(), outnid));
+//     }
+
+//     _TreeFindNodeEnd(getDBID(), &findContext);
+
+//     return nodes;
+// }
+
 inline std::vector<std::string> Tree::findTagWild(const std::string& wildcard) const
 {
     std::vector<std::string> tags;
 
-    int outnid = _nid;
+    int outnid;
     void * findContext = nullptr;
     while (true)
     {
@@ -10191,13 +10437,13 @@ inline void Device::addParts(std::vector<DevicePart>&& parts) const
 
     for (const auto& part : parts)
     {
-        printf("Adding %s\n", part.Path.c_str());
+        printf("Adding %s (%s)\n", part.Path.c_str(), to_string(part.Usage).c_str());
         auto node = addNode(part.Path, part.Usage);
 
         if (!part.ValueExpression.empty()) {
             node.putRecord(getTree()->compileData(part.ValueExpression));
         }
-        else {
+        else if (part.Value) {
             node.putRecord(*part.Value);
         }
 

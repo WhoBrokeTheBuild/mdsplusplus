@@ -245,6 +245,11 @@ protected:
     }                                                                              \
                                                                                    \
     [[nodiscard]]                                                                  \
+    inline ArrayType * cloneNew() const {                                          \
+        return _cloneNew<ArrayType>();                                             \
+    }                                                                              \
+                                                                                   \
+    [[nodiscard]]                                                                  \
     inline std::vector<__ctype> getVector() const {                                \
         return _getVector<__ctype>();                                              \
     }                                                                              \

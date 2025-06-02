@@ -267,6 +267,11 @@ public:
         return _clone<Data>();
     }
 
+    [[nodiscard]]
+    inline Data * cloneNew() const {
+        return _cloneNew<Data>();
+    }
+
     template <typename ResultType>
     [[nodiscard]]
     inline ResultType convert() const {
@@ -504,7 +509,26 @@ public:
     template <typename DataType,
         typename std::enable_if<std::is_base_of<Data, DataType>::value, bool>::type = true>
     inline bool operator!=(const DataType& other) const {
-        return !(*this == other);
+        // TODO: What if other has a tree?
+        if (getTree() != nullptr && other.getTree() != nullptr && getTree() != other.getTree()) {
+            return true;
+        }
+
+        bool notEqual = false;
+        mdsdsc_s_t out = {
+            .length = 1,
+            .dtype = DTYPE_BU,
+            .class_ = CLASS_S,
+            .pointer = (char *)&notEqual
+        };
+
+        mdsdsc_t * args[] = { getDescriptor(), other.getDescriptor() };
+        int status = _intrinsic(OPC_NE, 2, args, (mdsdsc_xd_t *)&out);
+        if (IS_NOT_OK(status)) {
+            throwException(status);
+        }
+
+        return notEqual;
     }
 
     template <typename DataType>
@@ -534,6 +558,17 @@ protected:
         }
 
         return ResultType(std::move(xd), getTree());
+    }
+
+    template <typename ResultType>
+    inline ResultType * _cloneNew() const {
+        mdsdsc_xd_t xd = MDSDSC_XD_INITIALIZER;
+        int status = MdsCopyDxXd(getDescriptor(), &xd);
+        if (IS_NOT_OK(status)) {
+            throwException(status);
+        }
+
+        return new ResultType(std::move(xd), getTree());
     }
 
     template <typename ResultType>

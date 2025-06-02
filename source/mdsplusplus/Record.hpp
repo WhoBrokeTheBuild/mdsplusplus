@@ -100,6 +100,11 @@ protected:
     [[nodiscard]]                                                \
     inline RecordType clone() const {                            \
         return _clone<RecordType>();                             \
+    }                                                            \
+                                                                 \
+    [[nodiscard]]                                                \
+    inline RecordType * cloneNew() const {                       \
+        return _cloneNew<RecordType>();                          \
     }
 
 #define MDSPLUS_RECORD_CUSTOMIZATION(RecordType)                 \

@@ -102,9 +102,14 @@ public:
 
     TreeNode getNode(const std::string& path) const;
 
+    std::vector<TreeNode> findNodeWild(const std::string& wildcard, std::vector<Usage> validUsages = {}) const;
+
     TreeNode addNode(const std::string& path, Usage usage) const;
 
     TreeNode addDevice(const std::string& path, const std::string& model) const;
+
+    template <typename ResultType = Data, typename ...ArgTypes>
+    ResultType doMethod(const std::string& method, ArgTypes... args);
 
     [[nodiscard]]
     inline uint64_t getTimeInserted() const {
@@ -382,6 +387,8 @@ public:
 
     template <typename ResultType = Data>
     ResultType getExtendedAttribute(const std::string& name);
+
+    void addTag(const std::string& tag);
 
     virtual std::vector<std::string> getTags() const;
 

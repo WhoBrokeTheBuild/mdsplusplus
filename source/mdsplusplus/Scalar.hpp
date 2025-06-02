@@ -87,6 +87,11 @@ protected:
     }                                                           \
                                                                 \
     [[nodiscard]]                                               \
+    inline ScalarType * cloneNew() const {                      \
+        return _cloneNew<ScalarType>();                         \
+    }                                                           \
+                                                                \
+    [[nodiscard]]                                               \
     inline __ctype getValue() const {                           \
         return _getValue<__ctype>();                            \
     }                                                           \

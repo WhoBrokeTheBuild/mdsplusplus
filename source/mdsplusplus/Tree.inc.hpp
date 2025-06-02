@@ -44,8 +44,8 @@ inline void Tree::open()
 
 inline void Tree::close()
 {
-    int status = _TreeClose(&_dbid, _treename.c_str(), _shot);
-    if (IS_NOT_OK(status)) {
+    int status = _TreeClose(&_dbid, nullptr, 0);
+    if (IS_NOT_OK(status) && status != TreeNOT_OPEN) {
         throwException(status);
     }
 
@@ -58,17 +58,60 @@ inline void Tree::close()
 
 inline void Tree::write()
 {
-    int status = _TreeWriteTree(&_dbid, _treename.c_str(), _shot);
+    int status = _TreeWriteTree(&_dbid, nullptr, 0);
     if (IS_NOT_OK(status)) {
         throwException(status);
     }
 }
 
+inline void Tree::createPulse(int shot) const
+{
+    // TODO: copy_only_this ?
+
+    int nid = getNID();
+    int status = _TreeCreatePulseFile(getDBID(), shot, 0, &nid);
+    if (IS_NOT_OK(status)) {
+        throwException(status);
+    }
+}
+
+// inline std::vector<TreeNode> Tree::findNodeWild(const std::string& wildcard) const
+// {
+//     std::vector<TreeNode> nodes;
+
+//     int usageMask = 0xFFFF;
+
+//     void * findContext = nullptr;
+//     while (true)
+//     {
+//         int outnid;
+//         int status = _TreeFindNodeWild(
+//             getDBID(),
+//             wildcard.c_str(),
+//             &outnid,
+//             &findContext,
+//             usageMask
+//         );
+//         if (status == TreeNMN || status == TreeNNF) {
+//             break;
+//         }
+//         else if (IS_NOT_OK(status)) {
+//             throwException(status);
+//         }
+
+//         nodes.push_back(TreeNode(getTree(), outnid));
+//     }
+
+//     _TreeFindNodeEnd(getDBID(), &findContext);
+
+//     return nodes;
+// }
+
 inline std::vector<std::string> Tree::findTagWild(const std::string& wildcard) const
 {
     std::vector<std::string> tags;
 
-    int outnid = _nid;
+    int outnid;
     void * findContext = nullptr;
     while (true)
     {

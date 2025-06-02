@@ -4,7 +4,7 @@ using namespace mdsplus;
 
 #include <gtest/gtest.h>
 
-#include <filesystem>
+#include "Util.hpp"
 
 class TreeFixture : public ::testing::Test
 {
@@ -18,31 +18,13 @@ protected:
     std::vector<std::string> _envList;
     std::vector<std::filesystem::path> _tempdirList;
 
-    const std::string MakeTempDir()
-    {
-        char tempdir[1024];
-
-        // e.g. /tmp/mdspp-XXXXXX
-        snprintf(
-            tempdir,
-            sizeof(tempdir),
-            "%s%cmdspp-XXXXXX",
-            std::filesystem::temp_directory_path().c_str(),
-            std::filesystem::path::preferred_separator
-        );
-
-        // e.g. /tmp/mdspp-123ABC
-        mkdtemp(tempdir);
-
-        _tempdirList.push_back(tempdir);
-        return tempdir;
-    }
-
     void SetUp() override
     {
         unsetenv("default_tree_path");
 
         auto tempdir = MakeTempDir();
+        _tempdirList.push_back(tempdir);
+        
         setenv(TREE_PATH_ENV, tempdir.c_str(), true);
         _envList.push_back(TREE_PATH_ENV);
 
