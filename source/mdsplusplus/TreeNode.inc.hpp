@@ -261,7 +261,7 @@ ResultType TreeNode::doMethod(const std::string& method, ArgTypes... args)
         dscList.push_back(arg.getDescriptor());
     }
 
-    DESCRIPTOR_NID(dscNID, getNID());
+    DESCRIPTOR_NID(dscNID, &_nid);
     DESCRIPTOR_FROM_CSTRING(dscMethod, method.c_str());
     mdsdsc_xd_t out = MDSDSC_XD_INITIALIZER;
     int status = _TreeDoMethodA(

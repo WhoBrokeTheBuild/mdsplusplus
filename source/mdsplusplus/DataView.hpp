@@ -78,7 +78,7 @@ public:
         : _dsc(mdsdsc_a_t{
             .length = sizeof(CType),
             .dtype = _getDTypeForCType<CType>(),
-            .class_ = CLASS_S,
+            .class_ = CLASS_A,
             .pointer = const_cast<char *>(reinterpret_cast<const char *>(values.data())),
             .scale = 0,
             .digits = 0,
@@ -102,7 +102,7 @@ public:
             : _dsc(mdsdsc_a_t{
                 .length = sizeof(CType),
                 .dtype = _getDTypeForCType<CType>(),
-                .class_ = CLASS_S,
+                .class_ = CLASS_A,
                 .pointer = const_cast<char *>(reinterpret_cast<const char *>(values.data())),
                 .scale = 0,
                 .digits = 0,
