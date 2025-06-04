@@ -252,7 +252,7 @@ inline TreeNode TreeNode::addDevice(const std::string& path, const std::string& 
 }
 
 template <typename ResultType /*= Data*/, typename ...ArgTypes>
-ResultType TreeNode::doMethod(const std::string& method, ArgTypes... args)
+ResultType TreeNode::doMethod(const std::string& method, const ArgTypes&... args)
 {
     std::vector<DataView> argList = { DataView(args)... };
 
@@ -293,7 +293,7 @@ inline std::string TreeNode::getNodeName() const
 }
 
 template <typename ValueType>
-inline void TreeNode::setExtendedAttribute(const std::string& name, ValueType value) const
+inline void TreeNode::setExtendedAttribute(const std::string& name, const ValueType& value) const
 {
     DataView argValue(value);
     int status = _TreeSetXNci(getDBID(), _nid, name.c_str(), argValue.getDescriptor());
@@ -482,7 +482,7 @@ inline std::vector<TreeNode> TreeNode::_getTreeNodeArrayNCI(nci_t code, nci_t co
 }
 
 template <typename ValueType>
-void TreeNode::putRow(int segmentLength, ValueType value, int64_t timestamp)
+void TreeNode::putRow(int segmentLength, const ValueType& value, int64_t timestamp)
 {
     DataView argValue(value);
 
@@ -499,7 +499,7 @@ void TreeNode::putRow(int segmentLength, ValueType value, int64_t timestamp)
 }
 
 template <typename ValueArrayType>
-void TreeNode::putSegment(ValueArrayType values, int index /*= -1*/)
+void TreeNode::putSegment(const ValueArrayType& values, int index /*= -1*/)
 {
     DataView argValues(values);
 
@@ -515,7 +515,7 @@ void TreeNode::putSegment(ValueArrayType values, int index /*= -1*/)
 }
 
 template <typename ValueArrayType>
-void TreeNode::putTimestampedSegment(int64_t * timestamps, ValueArrayType values)
+void TreeNode::putTimestampedSegment(int64_t * timestamps, const ValueArrayType& values)
 {
     DataView argValues(values);
 
@@ -571,10 +571,10 @@ template <
     typename ValueArrayType
 >
 void TreeNode::makeSegment(
-    StartIndexType startIndex,
-    EndIndexType endIndex,
-    DimensionType dimension,
-    ValueArrayType values,
+    const StartIndexType& startIndex,
+    const EndIndexType& endIndex,
+    const DimensionType& dimension,
+    const ValueArrayType& values,
     int index /*= -1*/,
     int rowsFilled /*= -1*/
 ) const
@@ -585,6 +585,12 @@ void TreeNode::makeSegment(
     DataView argValues(values);
 
     mdsdsc_a_t * dscValues = (mdsdsc_a_t *)argValues.getDescriptor();
+    
+    // Hack?
+    if (dscValues->dtype == DTYPE_DSC) {
+        dscValues = (mdsdsc_a_t *)dscValues->pointer;
+    }
+
     if (rowsFilled < 0) {
         rowsFilled = _getMaxRowsFilled(dscValues);
     }
@@ -611,10 +617,10 @@ template <
     typename ValueArrayType
 >
 void TreeNode::makeSegmentResampled(
-    StartIndexType startIndex,
-    EndIndexType endIndex,
-    DimensionType dimension,
-    ValueArrayType values,
+    const StartIndexType& startIndex,
+    const EndIndexType& endIndex,
+    const DimensionType& dimension,
+    const ValueArrayType& values,
     const TreeNode& resampleNode,
     int resampleFactor,
     int index /*= -1*/,
@@ -655,10 +661,10 @@ void TreeNode::makeSegmentResampled(
 //     typename ValueArrayType
 // >
 // void TreeNode::makeSegmentMinMax(
-//     StartIndexType startIndex,
-//     EndIndexType endIndex,
-//     DimensionType dimension,
-//     ValueArrayType values,
+//     const StartIndexType& startIndex,
+//     const EndIndexType& endIndex,
+//     const DimensionType& dimension,
+//     const ValueArrayType& values,
 //     const TreeNode& resampleNode,
 //     int resampleFactor,
 //     int index /*= -1*/,
@@ -695,7 +701,7 @@ void TreeNode::makeSegmentResampled(
 template <typename ValueArrayType>
 void TreeNode::makeTimestampedSegment(
     int64_t * timestamps,
-    ValueArrayType values,
+    const ValueArrayType& values,
     int index /*= -1*/,
     int rowsFilled /*= -1*/
 ) const

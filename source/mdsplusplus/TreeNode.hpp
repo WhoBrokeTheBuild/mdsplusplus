@@ -109,7 +109,7 @@ public:
     TreeNode addDevice(const std::string& path, const std::string& model) const;
 
     template <typename ResultType = Data, typename ...ArgTypes>
-    ResultType doMethod(const std::string& method, ArgTypes... args);
+    ResultType doMethod(const std::string& method, const ArgTypes&... args);
 
     [[nodiscard]]
     inline uint64_t getTimeInserted() const {
@@ -383,7 +383,7 @@ public:
     // setCompressionMethodString?
 
     template <typename ValueType>
-    void setExtendedAttribute(const std::string& name, ValueType value) const;
+    void setExtendedAttribute(const std::string& name, const ValueType& value) const;
 
     template <typename ResultType = Data>
     ResultType getExtendedAttribute(const std::string& name);
@@ -406,12 +406,12 @@ public:
     std::tuple<DataType, UnitsType> getDataWithUnits() const;
 
     template <typename DataType>
-    inline void setData(DataType value) const {
+    inline void setData(const DataType& value) const {
         putRecord(Data::FromScalar(value));
     }
 
     template <typename DataType, typename UnitsType>
-    inline void setDataWithUnits(DataType value, UnitsType units) const {
+    inline void setDataWithUnits(const DataType& value, const UnitsType& units) const {
         putRecord(WithUnits(Data::FromScalar(value), Data::FromScalar(units)));
     }
 
@@ -462,18 +462,18 @@ public:
     }
 
     template <typename ValueType>
-    void putRow(int segmentLength, ValueType value, int64_t timestamp);
+    void putRow(int segmentLength, const ValueType& value, int64_t timestamp);
 
     template <typename ValueArrayType>
-    void putSegment(ValueArrayType values, int index = -1);
+    void putSegment(const ValueArrayType& values, int index = -1);
 
     template <typename ValueArrayType>
-    inline void putTimestampedSegment(std::vector<int64_t> timestamps, ValueArrayType values) {
+    inline void putTimestampedSegment(std::vector<int64_t> timestamps, const ValueArrayType& values) {
         putTimestampedSegment(timestamps.data(), values);
     }
 
     template <typename ValueArrayType>
-    void putTimestampedSegment(int64_t * timestamps, ValueArrayType values);
+    void putTimestampedSegment(int64_t * timestamps, const ValueArrayType& values);
 
     template <
         typename StartIndexType,
@@ -482,10 +482,10 @@ public:
         typename ValueArrayType
     >
     void makeSegment(
-        StartIndexType startIndex,
-        EndIndexType endIndex,
-        DimensionType dimension,
-        ValueArrayType values,
+        const StartIndexType& startIndex,
+        const EndIndexType& endIndex,
+        const DimensionType& dimension,
+        const ValueArrayType& values,
         int index = -1,
         int rowsFilled = -1
     ) const;
@@ -497,10 +497,10 @@ public:
         typename ValueArrayType
     >
     void makeSegmentResampled(
-        StartIndexType startIndex,
-        EndIndexType endIndex,
-        DimensionType dimension,
-        ValueArrayType values,
+        const StartIndexType& startIndex,
+        const EndIndexType& endIndex,
+        const DimensionType& dimension,
+        const ValueArrayType& values,
         const TreeNode& resampleNode,
         int resampleFactor,
         int index = -1,
@@ -509,10 +509,10 @@ public:
 
     // template <typename StartIndexType, typename EndIndexType, typename DimensionType, typename ValueArrayType>
     // void makeSegmentMinMax(
-    //     StartIndexType startIndex,
-    //     EndIndexType endIndex,
-    //     DimensionType dimension,
-    //     ValueArrayType values,
+    //     const StartIndexType& startIndex,
+    //     const EndIndexType& endIndex,
+    //     const DimensionType& dimension,
+    //     const ValueArrayType& values,
     //     const TreeNode& resampleNode,
     //     int resampleFactor,
     //     int index = -1,
@@ -521,16 +521,16 @@ public:
 
     // template <typename TimestampArrayType, typename ValueArrayType>
     // inline void makeTimestampedSegment(
-    //     TimestampArrayType timestamps,
-    //     ValueArrayType values,
+    //     const TimestampArrayType& timestamps,
+    //     const ValueArrayType& values,
     //     int index = -1,
     //     int rowsFilled = -1
     // ) const;
 
     // template <typename ValueArrayType>
     // inline void makeTimestampedSegment(
-    //     Int64Array timestamps,
-    //     ValueArrayType values,
+    //     const Int64Array& timestamps,
+    //     const ValueArrayType& values,
     //     int index = -1,
     //     int rowsFilled = -1
     // ) const;
@@ -538,7 +538,7 @@ public:
     template <typename ValueArrayType>
     inline void makeTimestampedSegment(
         std::vector<int64_t> timestamps,
-        ValueArrayType values,
+        const ValueArrayType& values,
         int index = -1,
         int rowsFilled = -1
     ) const
@@ -549,7 +549,7 @@ public:
     template <typename ValueArrayType>
     void makeTimestampedSegment(
         int64_t * timestamps,
-        ValueArrayType values,
+        const ValueArrayType& values,
         int index = -1,
         int rowsFilled = -1
     ) const;

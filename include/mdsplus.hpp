@@ -3704,7 +3704,7 @@ public:
     TreeNode addDevice(const std::string& path, const std::string& model) const;
 
     template <typename ResultType = Data, typename ...ArgTypes>
-    ResultType doMethod(const std::string& method, ArgTypes... args);
+    ResultType doMethod(const std::string& method, const ArgTypes&... args);
 
     [[nodiscard]]
     inline uint64_t getTimeInserted() const {
@@ -3977,7 +3977,7 @@ public:
     // setCompressionMethodString?
 
     template <typename ValueType>
-    void setExtendedAttribute(const std::string& name, ValueType value) const;
+    void setExtendedAttribute(const std::string& name, const ValueType& value) const;
 
     template <typename ResultType = Data>
     ResultType getExtendedAttribute(const std::string& name);
@@ -4000,12 +4000,12 @@ public:
     std::tuple<DataType, UnitsType> getDataWithUnits() const;
 
     template <typename DataType>
-    inline void setData(DataType value) const {
+    inline void setData(const DataType& value) const {
         putRecord(Data::FromScalar(value));
     }
 
     template <typename DataType, typename UnitsType>
-    inline void setDataWithUnits(DataType value, UnitsType units) const {
+    inline void setDataWithUnits(const DataType& value, const UnitsType& units) const {
         putRecord(WithUnits(Data::FromScalar(value), Data::FromScalar(units)));
     }
 
@@ -4056,18 +4056,18 @@ public:
     }
 
     template <typename ValueType>
-    void putRow(int segmentLength, ValueType value, int64_t timestamp);
+    void putRow(int segmentLength, const ValueType& value, int64_t timestamp);
 
     template <typename ValueArrayType>
-    void putSegment(ValueArrayType values, int index = -1);
+    void putSegment(const ValueArrayType& values, int index = -1);
 
     template <typename ValueArrayType>
-    inline void putTimestampedSegment(std::vector<int64_t> timestamps, ValueArrayType values) {
+    inline void putTimestampedSegment(std::vector<int64_t> timestamps, const ValueArrayType& values) {
         putTimestampedSegment(timestamps.data(), values);
     }
 
     template <typename ValueArrayType>
-    void putTimestampedSegment(int64_t * timestamps, ValueArrayType values);
+    void putTimestampedSegment(int64_t * timestamps, const ValueArrayType& values);
 
     template <
         typename StartIndexType,
@@ -4076,10 +4076,10 @@ public:
         typename ValueArrayType
     >
     void makeSegment(
-        StartIndexType startIndex,
-        EndIndexType endIndex,
-        DimensionType dimension,
-        ValueArrayType values,
+        const StartIndexType& startIndex,
+        const EndIndexType& endIndex,
+        const DimensionType& dimension,
+        const ValueArrayType& values,
         int index = -1,
         int rowsFilled = -1
     ) const;
@@ -4091,10 +4091,10 @@ public:
         typename ValueArrayType
     >
     void makeSegmentResampled(
-        StartIndexType startIndex,
-        EndIndexType endIndex,
-        DimensionType dimension,
-        ValueArrayType values,
+        const StartIndexType& startIndex,
+        const EndIndexType& endIndex,
+        const DimensionType& dimension,
+        const ValueArrayType& values,
         const TreeNode& resampleNode,
         int resampleFactor,
         int index = -1,
@@ -4103,10 +4103,10 @@ public:
 
     // template <typename StartIndexType, typename EndIndexType, typename DimensionType, typename ValueArrayType>
     // void makeSegmentMinMax(
-    //     StartIndexType startIndex,
-    //     EndIndexType endIndex,
-    //     DimensionType dimension,
-    //     ValueArrayType values,
+    //     const StartIndexType& startIndex,
+    //     const EndIndexType& endIndex,
+    //     const DimensionType& dimension,
+    //     const ValueArrayType& values,
     //     const TreeNode& resampleNode,
     //     int resampleFactor,
     //     int index = -1,
@@ -4115,16 +4115,16 @@ public:
 
     // template <typename TimestampArrayType, typename ValueArrayType>
     // inline void makeTimestampedSegment(
-    //     TimestampArrayType timestamps,
-    //     ValueArrayType values,
+    //     const TimestampArrayType& timestamps,
+    //     const ValueArrayType& values,
     //     int index = -1,
     //     int rowsFilled = -1
     // ) const;
 
     // template <typename ValueArrayType>
     // inline void makeTimestampedSegment(
-    //     Int64Array timestamps,
-    //     ValueArrayType values,
+    //     const Int64Array& timestamps,
+    //     const ValueArrayType& values,
     //     int index = -1,
     //     int rowsFilled = -1
     // ) const;
@@ -4132,7 +4132,7 @@ public:
     template <typename ValueArrayType>
     inline void makeTimestampedSegment(
         std::vector<int64_t> timestamps,
-        ValueArrayType values,
+        const ValueArrayType& values,
         int index = -1,
         int rowsFilled = -1
     ) const
@@ -4143,7 +4143,7 @@ public:
     template <typename ValueArrayType>
     void makeTimestampedSegment(
         int64_t * timestamps,
-        ValueArrayType values,
+        const ValueArrayType& values,
         int index = -1,
         int rowsFilled = -1
     ) const;
@@ -4488,7 +4488,7 @@ public:
     }
 
     inline DataView(std::nullptr_t)
-        : _dsc(mdsdsc_a_t{
+        : _dsc(array_coeff{
             .length = 0,
             .dtype = DTYPE_MISSING,
             .class_ = CLASS_MISSING,
@@ -4501,7 +4501,7 @@ public:
     template <typename DataType,
         typename std::enable_if<std::is_base_of<Data, DataType>::value, bool>::type = true>
     inline DataView(const DataType &value)
-        : _dsc(mdsdsc_a_t{
+        : _dsc(array_coeff{
             .length = 0,
             .dtype = DTYPE_DSC,
             .class_ = CLASS_S,
@@ -4513,7 +4513,7 @@ public:
     template <typename CType,
         typename std::enable_if<is_valid_ctype<CType>::value, bool>::type = true>
     inline DataView(const std::vector<CType> &values)
-        : _dsc(mdsdsc_a_t{
+        : _dsc(array_coeff{
             .length = sizeof(CType),
             .dtype = _getDTypeForCType<CType>(),
             .class_ = CLASS_A,
@@ -4524,11 +4524,13 @@ public:
                 .binscale = false,
                 .redim = true,
                 .column = true,
-                .coeff = false,
+                .coeff = true,
                 .bounds = false,
             },
-            .dimct = 0,
+            .dimct = 1,
             .arsize = arsize_t(values.size() * sizeof(CType)),
+            .a0 = const_cast<char *>(reinterpret_cast<const char *>(values.data())),
+            .m = { static_cast<uint32_t>(values.size()), 0, 0, 0, 0, 0, 0, 0 },
         })
     { }
 
@@ -4537,7 +4539,7 @@ public:
         template <typename CType,
             typename std::enable_if<is_valid_ctype<CType>::value, bool>::type = true>
         inline DataView(std::span<const CType> values)
-            : _dsc(mdsdsc_a_t{
+            : _dsc(array_coeff{
                 .length = sizeof(CType),
                 .dtype = _getDTypeForCType<CType>(),
                 .class_ = CLASS_A,
@@ -4548,11 +4550,13 @@ public:
                     .binscale = false,
                     .redim = true,
                     .column = true,
-                    .coeff = false,
+                    .coeff = true,
                     .bounds = false,
                 },
-                .dimct = 0,
+                .dimct = 1,
                 .arsize = arsize_t(values.size() * sizeof(CType)),
+                .a0 = const_cast<char *>(reinterpret_cast<const char *>(values.data())),
+                .m = { static_cast<uint32_t>(values.size()), 0, 0, 0, 0, 0, 0, 0 },
             })
         { }
 
@@ -4561,7 +4565,7 @@ public:
     template <typename CType,
         typename std::enable_if<is_valid_ctype<CType>::value, bool>::type = true>
     inline DataView(const CType &value)
-        : _dsc(mdsdsc_a_t{
+        : _dsc(array_coeff{
             .length = sizeof(CType),
             .dtype = _getDTypeForCType<CType>(),
             .class_ = CLASS_S,
@@ -4573,7 +4577,7 @@ public:
     #ifdef __cpp_lib_string_view
 
         inline DataView(std::string_view value)
-            : _dsc(mdsdsc_a_t{
+            : _dsc(array_coeff{
                 .length = length_t(value.size()),
                 .dtype = DTYPE_T,
                 .class_ = CLASS_S,
@@ -4584,7 +4588,7 @@ public:
     #else
 
         inline DataView(const char * value)
-            : _dsc(mdsdsc_a_t{
+            : _dsc(array_coeff{
                 .length = length_t(strlen(value)),
                 .dtype = DTYPE_T,
                 .class_ = CLASS_S,
@@ -4593,7 +4597,7 @@ public:
         { }
 
         inline DataView(const std::string& value)
-            : _dsc(mdsdsc_a_t{
+            : _dsc(array_coeff{
                 .length = length_t(value.size()),
                 .dtype = DTYPE_T,
                 .class_ = CLASS_S,
@@ -4604,7 +4608,7 @@ public:
     #endif // __cpp_lib_string_view
 
     inline DataView(const TreeNode& node)
-        : _dsc(mdsdsc_a_t{
+        : _dsc(array_coeff{
             .length = sizeof(node._nid),
             .dtype = DTYPE_NID,
             .class_ = CLASS_S,
@@ -4615,7 +4619,7 @@ public:
 
 private:
 
-    mdsdsc_a_t _dsc = MDSDSC_XD_INITIALIZER;
+    array_coeff _dsc = MDSDSC_XD_INITIALIZER;
 
     Tree * _tree = nullptr;
 
@@ -9730,7 +9734,7 @@ inline TreeNode TreeNode::addDevice(const std::string& path, const std::string& 
 }
 
 template <typename ResultType /*= Data*/, typename ...ArgTypes>
-ResultType TreeNode::doMethod(const std::string& method, ArgTypes... args)
+ResultType TreeNode::doMethod(const std::string& method, const ArgTypes&... args)
 {
     std::vector<DataView> argList = { DataView(args)... };
 
@@ -9771,7 +9775,7 @@ inline std::string TreeNode::getNodeName() const
 }
 
 template <typename ValueType>
-inline void TreeNode::setExtendedAttribute(const std::string& name, ValueType value) const
+inline void TreeNode::setExtendedAttribute(const std::string& name, const ValueType& value) const
 {
     DataView argValue(value);
     int status = _TreeSetXNci(getDBID(), _nid, name.c_str(), argValue.getDescriptor());
@@ -9960,7 +9964,7 @@ inline std::vector<TreeNode> TreeNode::_getTreeNodeArrayNCI(nci_t code, nci_t co
 }
 
 template <typename ValueType>
-void TreeNode::putRow(int segmentLength, ValueType value, int64_t timestamp)
+void TreeNode::putRow(int segmentLength, const ValueType& value, int64_t timestamp)
 {
     DataView argValue(value);
 
@@ -9977,7 +9981,7 @@ void TreeNode::putRow(int segmentLength, ValueType value, int64_t timestamp)
 }
 
 template <typename ValueArrayType>
-void TreeNode::putSegment(ValueArrayType values, int index /*= -1*/)
+void TreeNode::putSegment(const ValueArrayType& values, int index /*= -1*/)
 {
     DataView argValues(values);
 
@@ -9993,7 +9997,7 @@ void TreeNode::putSegment(ValueArrayType values, int index /*= -1*/)
 }
 
 template <typename ValueArrayType>
-void TreeNode::putTimestampedSegment(int64_t * timestamps, ValueArrayType values)
+void TreeNode::putTimestampedSegment(int64_t * timestamps, const ValueArrayType& values)
 {
     DataView argValues(values);
 
@@ -10049,10 +10053,10 @@ template <
     typename ValueArrayType
 >
 void TreeNode::makeSegment(
-    StartIndexType startIndex,
-    EndIndexType endIndex,
-    DimensionType dimension,
-    ValueArrayType values,
+    const StartIndexType& startIndex,
+    const EndIndexType& endIndex,
+    const DimensionType& dimension,
+    const ValueArrayType& values,
     int index /*= -1*/,
     int rowsFilled /*= -1*/
 ) const
@@ -10063,6 +10067,12 @@ void TreeNode::makeSegment(
     DataView argValues(values);
 
     mdsdsc_a_t * dscValues = (mdsdsc_a_t *)argValues.getDescriptor();
+
+    // Hack?
+    if (dscValues->dtype == DTYPE_DSC) {
+        dscValues = (mdsdsc_a_t *)dscValues->pointer;
+    }
+
     if (rowsFilled < 0) {
         rowsFilled = _getMaxRowsFilled(dscValues);
     }
@@ -10089,10 +10099,10 @@ template <
     typename ValueArrayType
 >
 void TreeNode::makeSegmentResampled(
-    StartIndexType startIndex,
-    EndIndexType endIndex,
-    DimensionType dimension,
-    ValueArrayType values,
+    const StartIndexType& startIndex,
+    const EndIndexType& endIndex,
+    const DimensionType& dimension,
+    const ValueArrayType& values,
     const TreeNode& resampleNode,
     int resampleFactor,
     int index /*= -1*/,
@@ -10133,10 +10143,10 @@ void TreeNode::makeSegmentResampled(
 //     typename ValueArrayType
 // >
 // void TreeNode::makeSegmentMinMax(
-//     StartIndexType startIndex,
-//     EndIndexType endIndex,
-//     DimensionType dimension,
-//     ValueArrayType values,
+//     const StartIndexType& startIndex,
+//     const EndIndexType& endIndex,
+//     const DimensionType& dimension,
+//     const ValueArrayType& values,
 //     const TreeNode& resampleNode,
 //     int resampleFactor,
 //     int index /*= -1*/,
@@ -10173,7 +10183,7 @@ void TreeNode::makeSegmentResampled(
 template <typename ValueArrayType>
 void TreeNode::makeTimestampedSegment(
     int64_t * timestamps,
-    ValueArrayType values,
+    const ValueArrayType& values,
     int index /*= -1*/,
     int rowsFilled /*= -1*/
 ) const

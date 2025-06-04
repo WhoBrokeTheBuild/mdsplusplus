@@ -50,7 +50,7 @@ public:
     }
 
     inline DataView(std::nullptr_t)
-        : _dsc(mdsdsc_a_t{
+        : _dsc(array_coeff{
             .length = 0,
             .dtype = DTYPE_MISSING,
             .class_ = CLASS_MISSING,
@@ -63,7 +63,7 @@ public:
     template <typename DataType,
         typename std::enable_if<std::is_base_of<Data, DataType>::value, bool>::type = true>
     inline DataView(const DataType &value)
-        : _dsc(mdsdsc_a_t{
+        : _dsc(array_coeff{
             .length = 0,
             .dtype = DTYPE_DSC,
             .class_ = CLASS_S,
@@ -75,7 +75,7 @@ public:
     template <typename CType,
         typename std::enable_if<is_valid_ctype<CType>::value, bool>::type = true>
     inline DataView(const std::vector<CType> &values)
-        : _dsc(mdsdsc_a_t{
+        : _dsc(array_coeff{
             .length = sizeof(CType),
             .dtype = _getDTypeForCType<CType>(),
             .class_ = CLASS_A,
@@ -86,11 +86,13 @@ public:
                 .binscale = false,
                 .redim = true,
                 .column = true,
-                .coeff = false,
+                .coeff = true,
                 .bounds = false,
             },
-            .dimct = 0,
+            .dimct = 1,
             .arsize = arsize_t(values.size() * sizeof(CType)),
+            .a0 = const_cast<char *>(reinterpret_cast<const char *>(values.data())),
+            .m = { static_cast<uint32_t>(values.size()), 0, 0, 0, 0, 0, 0, 0 },
         })
     { }
 
@@ -99,7 +101,7 @@ public:
         template <typename CType,
             typename std::enable_if<is_valid_ctype<CType>::value, bool>::type = true>
         inline DataView(std::span<const CType> values)
-            : _dsc(mdsdsc_a_t{
+            : _dsc(array_coeff{
                 .length = sizeof(CType),
                 .dtype = _getDTypeForCType<CType>(),
                 .class_ = CLASS_A,
@@ -110,11 +112,13 @@ public:
                     .binscale = false,
                     .redim = true,
                     .column = true,
-                    .coeff = false,
+                    .coeff = true,
                     .bounds = false,
                 },
-                .dimct = 0,
+                .dimct = 1,
                 .arsize = arsize_t(values.size() * sizeof(CType)),
+                .a0 = const_cast<char *>(reinterpret_cast<const char *>(values.data())),
+                .m = { static_cast<uint32_t>(values.size()), 0, 0, 0, 0, 0, 0, 0 },
             })
         { }
         
@@ -123,7 +127,7 @@ public:
     template <typename CType,
         typename std::enable_if<is_valid_ctype<CType>::value, bool>::type = true>
     inline DataView(const CType &value)
-        : _dsc(mdsdsc_a_t{
+        : _dsc(array_coeff{
             .length = sizeof(CType),
             .dtype = _getDTypeForCType<CType>(),
             .class_ = CLASS_S,
@@ -135,7 +139,7 @@ public:
     #ifdef __cpp_lib_string_view
 
         inline DataView(std::string_view value)
-            : _dsc(mdsdsc_a_t{
+            : _dsc(array_coeff{
                 .length = length_t(value.size()),
                 .dtype = DTYPE_T,
                 .class_ = CLASS_S,
@@ -146,7 +150,7 @@ public:
     #else
 
         inline DataView(const char * value)
-            : _dsc(mdsdsc_a_t{
+            : _dsc(array_coeff{
                 .length = length_t(strlen(value)),
                 .dtype = DTYPE_T,
                 .class_ = CLASS_S,
@@ -155,7 +159,7 @@ public:
         { }
 
         inline DataView(const std::string& value)
-            : _dsc(mdsdsc_a_t{
+            : _dsc(array_coeff{
                 .length = length_t(value.size()),
                 .dtype = DTYPE_T,
                 .class_ = CLASS_S,
@@ -166,7 +170,7 @@ public:
     #endif // __cpp_lib_string_view
 
     inline DataView(const TreeNode& node)
-        : _dsc(mdsdsc_a_t{
+        : _dsc(array_coeff{
             .length = sizeof(node._nid),
             .dtype = DTYPE_NID,
             .class_ = CLASS_S,
@@ -177,7 +181,7 @@ public:
 
 private:
 
-    mdsdsc_a_t _dsc = MDSDSC_XD_INITIALIZER;
+    array_coeff _dsc = MDSDSC_XD_INITIALIZER;
 
     Tree * _tree = nullptr;
 
