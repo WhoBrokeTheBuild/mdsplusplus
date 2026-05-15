@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 
 import os
+import platform
+import subprocess
 
 root_path = os.path.dirname(os.path.dirname(__file__))
 
@@ -144,10 +146,13 @@ def process_header(filename):
 input_filename = os.path.join(root_path, 'source/mdsplus.hpp')
 process_header(input_filename)
 
+if os.path.exists('/usr/bin/chmod'):
+    subprocess.run(['/usr/bin/chmod', '+w', 'include/mdsplus.hpp'])
+
 output_file = open('include/mdsplus.hpp', 'wt')
 
 output_file.write('''//
-// Copyright (c) 2025, Massachusetts Institute of Technology All rights reserved.
+// Copyright (c) 2026, Massachusetts Institute of Technology All rights reserved.
 // 
 // Permission is hereby granted, free of charge, to any person obtaining a copy of
 // this software and associated documentation files (the “Software”), to deal in
@@ -236,3 +241,6 @@ for namespace, lines in sections.items():
 
 output_file.write('#endif // MDSPLUS_HPP\n')
 output_file.close()
+
+if os.path.exists('/usr/bin/chmod'):
+    subprocess.run(['/usr/bin/chmod', '-w', 'include/mdsplus.hpp'])

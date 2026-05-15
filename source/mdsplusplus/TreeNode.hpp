@@ -84,6 +84,10 @@ public:
 
     virtual ~TreeNode() = default;
 
+    TreeNode(const TreeNode& other) = default;
+
+    TreeNode& operator=(const TreeNode& other) = default;
+
     [[nodiscard]]
     inline Tree * getTree() const {
         return _tree;
@@ -139,6 +143,34 @@ public:
     [[nodiscard]]
     inline uint32_t getStatus() const {
         return _getNCI<uint32_t>(NciSTATUS);
+    }
+
+    // TODO: Double check all the on/off functions
+
+    inline bool isOn() const {
+        uint32_t status = getStatus();
+        return ((status & (NciM_STATE)) == 0);
+    }
+
+    inline bool isOff() const {
+        return !isOn();
+    }
+
+    inline bool isParentOn() const {
+        uint32_t status = getStatus();
+        return ((status & (NciM_PARENT_STATE)) == 0);
+    }
+
+    inline bool isParentOff() const {
+        return !isParentOn();
+    }
+
+    inline void turnOn() {
+        _TreeTurnOn(getDBID(), _nid);
+    }
+
+    inline void turnOff() {
+        _TreeTurnOff(getDBID(), _nid);
     }
 
     [[nodiscard]]
@@ -415,12 +447,14 @@ public:
         putRecord(WithUnits(Data::FromScalar(value), Data::FromScalar(units)));
     }
 
+    // TODO: Fix to work with pointers
+
 #ifdef __cpp_lib_span
 
     template <typename DataType>
     void setArrayData(const std::span<const DataType> values, const std::vector<uint32_t>& dims = {}) const {
         if (dims.empty()) {
-            return setArrayData(values.data(), { values.size() });
+            return setArrayData(values.data(), { static_cast<uint32_t>(values.size()) });
         }
         return setArrayData(values.data(), dims);
     }
@@ -428,7 +462,7 @@ public:
     template <typename DataType, typename UnitsType>
     void setArrayDataWithUnits(const std::span<const DataType> values, UnitsType units, const std::vector<uint32_t>& dims = {}) const {
         if (dims.empty()) {
-            return setArrayDataWithUnits(values.data(), units, { values.size() });
+            return setArrayDataWithUnits(values.data(), units, { static_cast<uint32_t>(values.size()) });
         }
         return setArrayDataWithUnits(values.data(), units, dims);
     }
@@ -438,15 +472,15 @@ public:
     template <typename DataType>
     inline void setArrayData(std::vector<DataType>& values, const std::vector<uint32_t>& dims = {}) const {
         if (dims.empty()) {
-            return setArrayData(values.data(), { values.size() });
+            return putRecord(Data::FromArray(values, { static_cast<uint32_t>(values.size()) }));
         }
-        return setArrayData(values.data(), dims);
+        return putRecord(Data::FromArray(values, dims));
     }
 
     template <typename DataType, typename UnitsType>
     inline void setArrayDataWithUnits(const std::vector<DataType>& values, UnitsType units, const std::vector<uint32_t>& dims = {}) const {
         if (dims.empty()) {
-            return setArrayDataWithUnits(values.data(), units, { values.size() });
+            return setArrayDataWithUnits(values.data(), units, { static_cast<uint32_t>(values.size()) });
         }
         return setArrayDataWithUnits(values.data(), units, dims);
     }
@@ -553,6 +587,12 @@ public:
         int index = -1,
         int rowsFilled = -1
     ) const;
+
+    template <typename ValueType>
+    void setSegmentScale(const ValueType& value);
+
+    template <typename ResultType = Data>
+    ResultType getSegmentScale();
 
     // TODO: Move
     #ifdef __cpp_lib_optional

@@ -14,6 +14,7 @@ inline void String::setValue(const char * value, length_t length)
         (char *)value
     };
 
+    // TODO: Verify that this does free the existing XD
     int status = MdsCopyDxXd((mdsdsc_t *)&dsc, &_xd);
     if (IS_NOT_OK(status)) {
         throwException(status);

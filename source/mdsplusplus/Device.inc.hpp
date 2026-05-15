@@ -13,7 +13,13 @@ inline void Device::addParts(std::vector<DevicePart>&& parts) const
     for (const auto& part : parts)
     {
         printf("Adding %s (%s)\n", part.Path.c_str(), to_string(part.Usage).c_str());
-        auto node = addNode(part.Path, part.Usage);
+        addNode(part.Path, part.Usage);
+    }
+
+    for (const auto& part : parts) {
+
+        printf("Setting %s (%s)\n", part.Path.c_str(), to_string(part.Usage).c_str());
+        auto node = getNode(part.Path);
         
         if (!part.ValueExpression.empty()) {
             node.putRecord(getTree()->compileData(part.ValueExpression));
@@ -23,6 +29,10 @@ inline void Device::addParts(std::vector<DevicePart>&& parts) const
         }
 
         node.setFlagsOn(part.Flags);
+
+        if (part.Callback) {
+            part.Callback(node);
+        }
     }
 
     for (auto& part : parts)

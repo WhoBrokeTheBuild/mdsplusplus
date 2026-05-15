@@ -62,7 +62,7 @@ public:
     // to it, not take ownership, so we store a CLASS_S descriptor instead of a CLASS_XD.
     template <typename DataType,
         typename std::enable_if<std::is_base_of<Data, DataType>::value, bool>::type = true>
-    inline DataView(const DataType &value)
+    inline DataView(const DataType& value)
         : _dsc(array_coeff{
             .length = 0,
             .dtype = DTYPE_DSC,
@@ -74,7 +74,7 @@ public:
 
     template <typename CType,
         typename std::enable_if<is_valid_ctype<CType>::value, bool>::type = true>
-    inline DataView(const std::vector<CType> &values)
+    inline DataView(const std::vector<CType>& values)
         : _dsc(array_coeff{
             .length = sizeof(CType),
             .dtype = _getDTypeForCType<CType>(),
@@ -126,7 +126,7 @@ public:
 
     template <typename CType,
         typename std::enable_if<is_valid_ctype<CType>::value, bool>::type = true>
-    inline DataView(const CType &value)
+    inline DataView(const CType& value)
         : _dsc(array_coeff{
             .length = sizeof(CType),
             .dtype = _getDTypeForCType<CType>(),

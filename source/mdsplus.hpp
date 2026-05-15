@@ -12,6 +12,7 @@ namespace mdsplus { }
 
 #include <mdsplusplus/Exceptions.hpp>
 
+#include <mdsplusplus/Version.hpp>
 #include <mdsplusplus/Data.hpp>
 #include <mdsplusplus/TreeNode.hpp>
 #include <mdsplusplus/Tree.hpp>

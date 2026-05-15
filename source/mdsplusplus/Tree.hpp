@@ -24,6 +24,7 @@ enum class Mode
 };
 
 std::string to_string(const Mode& mode);
+Mode from_string(const std::string& mode); // TODO: Rename?
 
 class Tree : public TreeNode
 {
@@ -51,7 +52,7 @@ public:
         TreeSwitchDbid(getDBID());
     }
 
-    Tree();
+    Tree() = default;
 
     Tree(const std::string& treename, int shot, Mode mode = Mode::Normal)
         : _treename(treename)

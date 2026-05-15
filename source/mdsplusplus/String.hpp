@@ -126,6 +126,11 @@ inline std::string Data::getData() const {
     return getData<String>().getString();
 }
 
+template <>
+inline Data Data::FromScalar(const char * value) {
+    return String(value);
+}
+
 #ifdef __cpp_lib_string_view
 
     template <>
@@ -134,11 +139,6 @@ inline std::string Data::getData() const {
     }
 
 #else
-
-    template <>
-    inline Data Data::FromScalar(const char * value) {
-        return String(value);
-    }
 
     template <>
     inline Data Data::FromScalar(const std::string& value) {
@@ -229,7 +229,7 @@ public:
 
     #endif // __cpp_lib_string_view
 
-#ifdef __cpp_lib_span
+    #ifdef __cpp_lib_span
 
         inline void setValues(
             std::span<const std::string> values,
@@ -340,7 +340,8 @@ inline StringArray Data::releaseAndConvert()
 
 namespace std {
 
-template <> struct hash<mdsplus::String>
+template <>
+struct hash<mdsplus::String>
 {
     size_t operator()(const mdsplus::String& data) const
     {

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2025, Massachusetts Institute of Technology All rights reserved.
+// Copyright (c) 2026, Massachusetts Institute of Technology All rights reserved.
 // 
 // Permission is hereby granted, free of charge, to any person obtaining a copy of
 // this software and associated documentation files (the “Software”), to deal in
@@ -60,6 +60,8 @@ extern "C" {
     #include <tdishr_messages.h>
     #include <treeshr.h>
     #include <treeshr_messages.h>
+
+    // Needed for MdsRelease
 
     int TdiConvert(mdsdsc_a_t * dsc, mdsdsc_a_t * convert);
     int TdiCall(dtype_t rtype, int narg, mdsdsc_t *list[], mdsdsc_xd_t *out_ptr);
@@ -3061,6 +3063,10 @@ inline void throwException(int status)
     }
 }
 
+inline const char * GetVersion() {
+    return MdsRelease();
+}
+
 enum class Class : uint8_t
 {
     Missing = CLASS_MISSING,
@@ -3210,18 +3216,25 @@ public:
     Data& operator=(Data&) = delete;
 
     // Enable move operators
-    inline Data(Data&& other) {
+    inline Data(Data&& other)
+    {
         _xd = other._xd;
         other._xd = MDSDSC_XD_INITIALIZER;
+
         _tree = other._tree;
         other._tree = nullptr;
     }
 
-    Data& operator=(Data&& other) {
+    Data& operator=(Data&& other)
+    {
+        MdsFree1Dx(&_xd, nullptr);
+
         _xd = other._xd;
         other._xd = MDSDSC_XD_INITIALIZER;
+
         _tree = other._tree;
         other._tree = nullptr;
+
         return *this;
     }
 
@@ -3679,6 +3692,10 @@ public:
 
     virtual ~TreeNode() = default;
 
+    TreeNode(const TreeNode& other) = default;
+
+    TreeNode& operator=(const TreeNode& other) = default;
+
     [[nodiscard]]
     inline Tree * getTree() const {
         return _tree;
@@ -3734,6 +3751,34 @@ public:
     [[nodiscard]]
     inline uint32_t getStatus() const {
         return _getNCI<uint32_t>(NciSTATUS);
+    }
+
+    // TODO: Double check all the on/off functions
+
+    inline bool isOn() const {
+        uint32_t status = getStatus();
+        return ((status & (NciM_STATE)) == 0);
+    }
+
+    inline bool isOff() const {
+        return !isOn();
+    }
+
+    inline bool isParentOn() const {
+        uint32_t status = getStatus();
+        return ((status & (NciM_PARENT_STATE)) == 0);
+    }
+
+    inline bool isParentOff() const {
+        return !isParentOn();
+    }
+
+    inline void turnOn() {
+        _TreeTurnOn(getDBID(), _nid);
+    }
+
+    inline void turnOff() {
+        _TreeTurnOff(getDBID(), _nid);
     }
 
     [[nodiscard]]
@@ -4009,12 +4054,14 @@ public:
         putRecord(WithUnits(Data::FromScalar(value), Data::FromScalar(units)));
     }
 
+    // TODO: Fix to work with pointers
+
 #ifdef __cpp_lib_span
 
     template <typename DataType>
     void setArrayData(const std::span<const DataType> values, const std::vector<uint32_t>& dims = {}) const {
         if (dims.empty()) {
-            return setArrayData(values.data(), { values.size() });
+            return setArrayData(values.data(), { static_cast<uint32_t>(values.size()) });
         }
         return setArrayData(values.data(), dims);
     }
@@ -4022,7 +4069,7 @@ public:
     template <typename DataType, typename UnitsType>
     void setArrayDataWithUnits(const std::span<const DataType> values, UnitsType units, const std::vector<uint32_t>& dims = {}) const {
         if (dims.empty()) {
-            return setArrayDataWithUnits(values.data(), units, { values.size() });
+            return setArrayDataWithUnits(values.data(), units, { static_cast<uint32_t>(values.size()) });
         }
         return setArrayDataWithUnits(values.data(), units, dims);
     }
@@ -4032,15 +4079,15 @@ public:
     template <typename DataType>
     inline void setArrayData(std::vector<DataType>& values, const std::vector<uint32_t>& dims = {}) const {
         if (dims.empty()) {
-            return setArrayData(values.data(), { values.size() });
+            return putRecord(Data::FromArray(values, { static_cast<uint32_t>(values.size()) }));
         }
-        return setArrayData(values.data(), dims);
+        return putRecord(Data::FromArray(values, dims));
     }
 
     template <typename DataType, typename UnitsType>
     inline void setArrayDataWithUnits(const std::vector<DataType>& values, UnitsType units, const std::vector<uint32_t>& dims = {}) const {
         if (dims.empty()) {
-            return setArrayDataWithUnits(values.data(), units, { values.size() });
+            return setArrayDataWithUnits(values.data(), units, { static_cast<uint32_t>(values.size()) });
         }
         return setArrayDataWithUnits(values.data(), units, dims);
     }
@@ -4147,6 +4194,12 @@ public:
         int index = -1,
         int rowsFilled = -1
     ) const;
+
+    template <typename ValueType>
+    void setSegmentScale(const ValueType& value);
+
+    template <typename ResultType = Data>
+    ResultType getSegmentScale();
 
     // TODO: Move
     #ifdef __cpp_lib_optional
@@ -4259,6 +4312,7 @@ enum class Mode
 };
 
 std::string to_string(const Mode& mode);
+Mode from_string(const std::string& mode); // TODO: Rename?
 
 class Tree : public TreeNode
 {
@@ -4286,7 +4340,7 @@ public:
         TreeSwitchDbid(getDBID());
     }
 
-    Tree();
+    Tree() = default;
 
     Tree(const std::string& treename, int shot, Mode mode = Mode::Normal)
         : _treename(treename)
@@ -4500,7 +4554,7 @@ public:
     // to it, not take ownership, so we store a CLASS_S descriptor instead of a CLASS_XD.
     template <typename DataType,
         typename std::enable_if<std::is_base_of<Data, DataType>::value, bool>::type = true>
-    inline DataView(const DataType &value)
+    inline DataView(const DataType& value)
         : _dsc(array_coeff{
             .length = 0,
             .dtype = DTYPE_DSC,
@@ -4512,7 +4566,7 @@ public:
 
     template <typename CType,
         typename std::enable_if<is_valid_ctype<CType>::value, bool>::type = true>
-    inline DataView(const std::vector<CType> &values)
+    inline DataView(const std::vector<CType>& values)
         : _dsc(array_coeff{
             .length = sizeof(CType),
             .dtype = _getDTypeForCType<CType>(),
@@ -4564,7 +4618,7 @@ public:
 
     template <typename CType,
         typename std::enable_if<is_valid_ctype<CType>::value, bool>::type = true>
-    inline DataView(const CType &value)
+    inline DataView(const CType& value)
         : _dsc(array_coeff{
             .length = sizeof(CType),
             .dtype = _getDTypeForCType<CType>(),
@@ -4786,6 +4840,11 @@ inline std::string Data::getData() const {
     return getData<String>().getString();
 }
 
+template <>
+inline Data Data::FromScalar(const char * value) {
+    return String(value);
+}
+
 #ifdef __cpp_lib_string_view
 
     template <>
@@ -4794,11 +4853,6 @@ inline std::string Data::getData() const {
     }
 
 #else
-
-    template <>
-    inline Data Data::FromScalar(const char * value) {
-        return String(value);
-    }
 
     template <>
     inline Data Data::FromScalar(const std::string& value) {
@@ -4889,7 +4943,7 @@ public:
 
     #endif // __cpp_lib_string_view
 
-#ifdef __cpp_lib_span
+    #ifdef __cpp_lib_span
 
         inline void setValues(
             std::span<const std::string> values,
@@ -5916,7 +5970,7 @@ protected:
     void _setValues(DType dtype, const CType * values, const uint32_t * dims, dimct_t dimCount);
 
     template <typename CType>
-    std::vector<CType> _getVector() const;
+    std::vector<CType> _getValues() const;
 
     template <typename CType>
     const CType& _getValueAt(size_t index) const;
@@ -5927,6 +5981,12 @@ protected:
     inline const CType& _at(size_t index) const {
         return _getValueAt<CType>(index);
     }
+
+    template <typename CType>
+    const CType& _front() const;
+
+    template <typename CType>
+    const CType& _back() const;
 
     template <typename CType>
     CType * _begin() const;
@@ -5980,13 +6040,8 @@ public:
     }
 
     [[nodiscard]]
-    inline std::vector<__ctype> getVector() const {
-        return _getVector<__ctype>();
-    }
-
-    [[nodiscard]]
     inline std::vector<__ctype> getValues() const {
-        return getVector();
+        return _getValues<__ctype>();
     }
 
     [[nodiscard]]
@@ -6014,6 +6069,16 @@ public:
         dimct_t dimCount
     ) {
         _setValues(__dtype, values, dims, dimCount);
+    }
+
+    [[nodiscard]]
+    inline const __ctype& front() const {
+        return _front<__ctype>();
+    }
+
+    [[nodiscard]]
+    inline const __ctype& back() const {
+        return _back<__ctype>();
     }
 
     [[nodiscard]]
@@ -6122,13 +6187,8 @@ public:
     }
 
     [[nodiscard]]
-    inline std::vector<__ctype> getVector() const {
-        return _getVector<__ctype>();
-    }
-
-    [[nodiscard]]
     inline std::vector<__ctype> getValues() const {
-        return getVector();
+        return _getValues<__ctype>();
     }
 
     [[nodiscard]]
@@ -6156,6 +6216,16 @@ public:
         dimct_t dimCount
     ) {
         _setValues(__dtype, values, dims, dimCount);
+    }
+
+    [[nodiscard]]
+    inline const __ctype& front() const {
+        return _front<__ctype>();
+    }
+
+    [[nodiscard]]
+    inline const __ctype& back() const {
+        return _back<__ctype>();
     }
 
     [[nodiscard]]
@@ -6264,13 +6334,8 @@ public:
     }
 
     [[nodiscard]]
-    inline std::vector<__ctype> getVector() const {
-        return _getVector<__ctype>();
-    }
-
-    [[nodiscard]]
     inline std::vector<__ctype> getValues() const {
-        return getVector();
+        return _getValues<__ctype>();
     }
 
     [[nodiscard]]
@@ -6298,6 +6363,16 @@ public:
         dimct_t dimCount
     ) {
         _setValues(__dtype, values, dims, dimCount);
+    }
+
+    [[nodiscard]]
+    inline const __ctype& front() const {
+        return _front<__ctype>();
+    }
+
+    [[nodiscard]]
+    inline const __ctype& back() const {
+        return _back<__ctype>();
     }
 
     [[nodiscard]]
@@ -6402,13 +6477,8 @@ public:
     }
 
     [[nodiscard]]
-    inline std::vector<__ctype> getVector() const {
-        return _getVector<__ctype>();
-    }
-
-    [[nodiscard]]
     inline std::vector<__ctype> getValues() const {
-        return getVector();
+        return _getValues<__ctype>();
     }
 
     [[nodiscard]]
@@ -6436,6 +6506,16 @@ public:
         dimct_t dimCount
     ) {
         _setValues(__dtype, values, dims, dimCount);
+    }
+
+    [[nodiscard]]
+    inline const __ctype& front() const {
+        return _front<__ctype>();
+    }
+
+    [[nodiscard]]
+    inline const __ctype& back() const {
+        return _back<__ctype>();
     }
 
     [[nodiscard]]
@@ -6540,13 +6620,8 @@ public:
     }
 
     [[nodiscard]]
-    inline std::vector<__ctype> getVector() const {
-        return _getVector<__ctype>();
-    }
-
-    [[nodiscard]]
     inline std::vector<__ctype> getValues() const {
-        return getVector();
+        return _getValues<__ctype>();
     }
 
     [[nodiscard]]
@@ -6574,6 +6649,16 @@ public:
         dimct_t dimCount
     ) {
         _setValues(__dtype, values, dims, dimCount);
+    }
+
+    [[nodiscard]]
+    inline const __ctype& front() const {
+        return _front<__ctype>();
+    }
+
+    [[nodiscard]]
+    inline const __ctype& back() const {
+        return _back<__ctype>();
     }
 
     [[nodiscard]]
@@ -6678,13 +6763,8 @@ public:
     }
 
     [[nodiscard]]
-    inline std::vector<__ctype> getVector() const {
-        return _getVector<__ctype>();
-    }
-
-    [[nodiscard]]
     inline std::vector<__ctype> getValues() const {
-        return getVector();
+        return _getValues<__ctype>();
     }
 
     [[nodiscard]]
@@ -6712,6 +6792,16 @@ public:
         dimct_t dimCount
     ) {
         _setValues(__dtype, values, dims, dimCount);
+    }
+
+    [[nodiscard]]
+    inline const __ctype& front() const {
+        return _front<__ctype>();
+    }
+
+    [[nodiscard]]
+    inline const __ctype& back() const {
+        return _back<__ctype>();
     }
 
     [[nodiscard]]
@@ -6816,13 +6906,8 @@ public:
     }
 
     [[nodiscard]]
-    inline std::vector<__ctype> getVector() const {
-        return _getVector<__ctype>();
-    }
-
-    [[nodiscard]]
     inline std::vector<__ctype> getValues() const {
-        return getVector();
+        return _getValues<__ctype>();
     }
 
     [[nodiscard]]
@@ -6850,6 +6935,16 @@ public:
         dimct_t dimCount
     ) {
         _setValues(__dtype, values, dims, dimCount);
+    }
+
+    [[nodiscard]]
+    inline const __ctype& front() const {
+        return _front<__ctype>();
+    }
+
+    [[nodiscard]]
+    inline const __ctype& back() const {
+        return _back<__ctype>();
     }
 
     [[nodiscard]]
@@ -6954,13 +7049,8 @@ public:
     }
 
     [[nodiscard]]
-    inline std::vector<__ctype> getVector() const {
-        return _getVector<__ctype>();
-    }
-
-    [[nodiscard]]
     inline std::vector<__ctype> getValues() const {
-        return getVector();
+        return _getValues<__ctype>();
     }
 
     [[nodiscard]]
@@ -6988,6 +7078,16 @@ public:
         dimct_t dimCount
     ) {
         _setValues(__dtype, values, dims, dimCount);
+    }
+
+    [[nodiscard]]
+    inline const __ctype& front() const {
+        return _front<__ctype>();
+    }
+
+    [[nodiscard]]
+    inline const __ctype& back() const {
+        return _back<__ctype>();
     }
 
     [[nodiscard]]
@@ -7092,13 +7192,8 @@ public:
     }
 
     [[nodiscard]]
-    inline std::vector<__ctype> getVector() const {
-        return _getVector<__ctype>();
-    }
-
-    [[nodiscard]]
     inline std::vector<__ctype> getValues() const {
-        return getVector();
+        return _getValues<__ctype>();
     }
 
     [[nodiscard]]
@@ -7126,6 +7221,16 @@ public:
         dimct_t dimCount
     ) {
         _setValues(__dtype, values, dims, dimCount);
+    }
+
+    [[nodiscard]]
+    inline const __ctype& front() const {
+        return _front<__ctype>();
+    }
+
+    [[nodiscard]]
+    inline const __ctype& back() const {
+        return _back<__ctype>();
     }
 
     [[nodiscard]]
@@ -7230,13 +7335,8 @@ public:
     }
 
     [[nodiscard]]
-    inline std::vector<__ctype> getVector() const {
-        return _getVector<__ctype>();
-    }
-
-    [[nodiscard]]
     inline std::vector<__ctype> getValues() const {
-        return getVector();
+        return _getValues<__ctype>();
     }
 
     [[nodiscard]]
@@ -7264,6 +7364,16 @@ public:
         dimct_t dimCount
     ) {
         _setValues(__dtype, values, dims, dimCount);
+    }
+
+    [[nodiscard]]
+    inline const __ctype& front() const {
+        return _front<__ctype>();
+    }
+
+    [[nodiscard]]
+    inline const __ctype& back() const {
+        return _back<__ctype>();
     }
 
     [[nodiscard]]
@@ -7368,13 +7478,8 @@ public:
     }
 
     [[nodiscard]]
-    inline std::vector<__ctype> getVector() const {
-        return _getVector<__ctype>();
-    }
-
-    [[nodiscard]]
     inline std::vector<__ctype> getValues() const {
-        return getVector();
+        return _getValues<__ctype>();
     }
 
     [[nodiscard]]
@@ -7402,6 +7507,16 @@ public:
         dimct_t dimCount
     ) {
         _setValues(__dtype, values, dims, dimCount);
+    }
+
+    [[nodiscard]]
+    inline const __ctype& front() const {
+        return _front<__ctype>();
+    }
+
+    [[nodiscard]]
+    inline const __ctype& back() const {
+        return _back<__ctype>();
     }
 
     [[nodiscard]]
@@ -7506,13 +7621,8 @@ public:
     }
 
     [[nodiscard]]
-    inline std::vector<__ctype> getVector() const {
-        return _getVector<__ctype>();
-    }
-
-    [[nodiscard]]
     inline std::vector<__ctype> getValues() const {
-        return getVector();
+        return _getValues<__ctype>();
     }
 
     [[nodiscard]]
@@ -7540,6 +7650,16 @@ public:
         dimct_t dimCount
     ) {
         _setValues(__dtype, values, dims, dimCount);
+    }
+
+    [[nodiscard]]
+    inline const __ctype& front() const {
+        return _front<__ctype>();
+    }
+
+    [[nodiscard]]
+    inline const __ctype& back() const {
+        return _back<__ctype>();
     }
 
     [[nodiscard]]
@@ -7707,7 +7827,7 @@ protected:
 
     inline void _append(DType dtype, std::vector<mdsdsc_t *> values)
     {
-        std::vector<mdsdsc_t *> dscList = _getVector<mdsdsc_t *>();
+        std::vector<mdsdsc_t *> dscList = _getValues<mdsdsc_t *>();
         dscList.reserve(dscList.size() + values.size());
         dscList.insert(dscList.end(), values.begin(), values.end());
 
@@ -7770,7 +7890,7 @@ public:
         #ifdef __cpp_lib_span
             std::span<mdsdsc_t *> dscList = _getSpan<mdsdsc_t *>();
         #else
-            std::vector<mdsdsc_t *> dscList = _getVector<mdsdsc_t *>();
+            std::vector<mdsdsc_t *> dscList = _getValues<mdsdsc_t *>();
         #endif
 
         std::vector<Data> values;
@@ -7879,7 +7999,7 @@ public:
     {
         assert(keys.size() == values.size());
 
-        std::vector<mdsdsc_t *> dscList = _getVector<mdsdsc_t *>();
+        std::vector<mdsdsc_t *> dscList = _getValues<mdsdsc_t *>();
         for (size_t i = 0; i < keys.size(); ++i) {
             dscList.push_back(keys[i].getDescriptor());
             dscList.push_back(values[i].getDescriptor());
@@ -7917,7 +8037,7 @@ public:
         #ifdef __cpp_lib_span
             std::span<mdsdsc_t *> dscList = _getSpan<mdsdsc_t *>();
         #else
-            std::vector<mdsdsc_t *> dscList = _getVector<mdsdsc_t *>();
+            std::vector<mdsdsc_t *> dscList = _getValues<mdsdsc_t *>();
         #endif
 
         assert((dscList.size() % 2) == 0);
@@ -7954,7 +8074,7 @@ public:
         #ifdef __cpp_lib_span
             std::span<mdsdsc_t *> dscList = _getSpan<mdsdsc_t *>();
         #else
-            std::vector<mdsdsc_t *> dscList = _getVector<mdsdsc_t *>();
+            std::vector<mdsdsc_t *> dscList = _getValues<mdsdsc_t *>();
         #endif
 
         assert((dscList.size() % 2) == 0);
@@ -8371,6 +8491,15 @@ public:
 
     MDSPLUS_RECORD_BOOTSTRAP(Function, DType::Function)
 
+    Function(opcode_t opcode)
+    {
+        DESCRIPTOR_FUNCTION_0(dsc, &opcode);
+        int status = MdsCopyDxXd((mdsdsc_t *)&dsc, &_xd);
+        if (IS_NOT_OK(status)) {
+            throwException(status);
+        }
+    }
+
     template <typename ...ArgTypes>
     Function(opcode_t opcode, const ArgTypes& ...args)
     {
@@ -8733,6 +8862,29 @@ public:
         : TreeNode(tree, nid)
     { }
 
+    template <typename DeviceClass,
+        std::enable_if_t<std::is_base_of<Device, DeviceClass>::value, bool> = true>
+    static DeviceClass Add(Tree * tree, const std::string& name)
+    {
+        int nid = 0;
+        DESCRIPTOR_FROM_CSTRING(dscLibrary, DeviceClass::__library_name);
+        DESCRIPTOR_FROM_CSTRING(dscModel, DeviceClass::__class_name);
+        static DESCRIPTOR_CONGLOM(dscConglom, &dscLibrary, &dscModel, 0, 0);
+
+        std::vector<mdsplus::DevicePart> parts = DeviceClass::GetParts();
+
+        _TreeStartConglomerate(tree->getDBID(), parts.size() + 1);
+        _TreeAddNode(tree->getDBID(), name.c_str(), &nid, TreeUSAGE_DEVICE);
+        _TreePutRecord(tree->getDBID(), nid, (mdsdsc_t *)&dscConglom, 0);
+
+        DeviceClass device(tree, nid);
+        device.addParts(std::move(parts));
+
+        _TreeEndConglomerate(tree->getDBID());
+
+        return device;
+    }
+
     static std::vector<DevicePart> GetParts() {
         return {};
     }
@@ -8741,43 +8893,38 @@ public:
 
 };
 
-#define MDSPLUS_DEVICE_BOOTSTRAP(DeviceClass) \
-    DeviceClass(Tree * tree, int nid) \
-        : Device(tree, nid) \
-    { } \
-    virtual ~DeviceClass() = default; \
+// TODO: Error handling
 
-#define MDSPLUS_DEVICE(LibraryName, DeviceClass, DeviceClassLower)               \
-    extern "C" int DeviceClassLower##__add(                                      \
-        mdsdsc_t * dscName,                                                      \
-        mdsdsc_t * dscDummy,                                                     \
-        int * nidOut)                                                            \
-    {                                                                            \
-        (void)dscDummy;                                                          \
-        int nidHead = 0;                                                         \
-        static DESCRIPTOR(dscLibrary, LibraryName);                              \
-        static DESCRIPTOR(dscModel, #DeviceClass);                               \
-        mdsdsc_t * dscLibraryPtr = (dscLibrary.pointer ? &dscLibrary : nullptr); \
-        static DESCRIPTOR_CONGLOM(dscConglom, dscLibraryPtr, &dscModel, 0, 0);   \
-        std::vector<mdsplus::DevicePart> parts = DeviceClass::GetParts();        \
-        TreeStartConglomerate(parts.size() + 1);                                 \
-        std::string name(dscName->pointer, dscName->length);                     \
-        TreeAddNode(name.c_str(), &nidHead, TreeUSAGE_DEVICE);                   \
-        TreePutRecord(nidHead, (mdsdsc_t *)&dscConglom, 0);                      \
-        Tree tree = mdsplus::Tree::GetActive();                                  \
-        DeviceClass device(&tree, nidHead);                                      \
-        device.addParts(std::move(parts));                                       \
-        TreeEndConglomerate();                                                   \
-        if (nidOut) {                                                            \
-            *nidOut = nidHead;                                                   \
-        }                                                                        \
-        return TreeSUCCESS;                                                      \
+#define MDSPLUS_DEVICE_BOOTSTRAP(LibraryName, DeviceClass, DeviceClassLower) \
+    static inline const char * __library_name = #LibraryName;                \
+    static inline const char * __class_name = #DeviceClass;                  \
+    static inline const char * __class_name_lower = #DeviceClassLower;       \
+                                                                             \
+    DeviceClass(Tree * tree, int nid)                                        \
+        : Device(tree, nid)                                                  \
+    { }                                                                      \
+    virtual ~DeviceClass() = default;                                        \
+
+#define MDSPLUS_DEVICE(DeviceClassLower, DeviceClass)               \
+    extern "C" int DeviceClassLower##__add(                         \
+        mdsdsc_t * dscName,                                         \
+        mdsdsc_t * dscDummy,                                        \
+        int * nidOut)                                               \
+    {                                                               \
+        (void)dscDummy;                                             \
+        Tree tree = mdsplus::Tree::GetActive();                     \
+        std::string name(dscName->pointer, dscName->length);        \
+        const auto& device = Device::Add<DeviceClass>(&tree, name); \
+        if (nidOut) {                                               \
+            *nidOut = device.getNID();                              \
+        }                                                           \
+        return TreeSUCCESS;                                         \
     }
 
 #define MDSPLUS_DEVICE_METHOD(DeviceClassLower, DeviceClass, MethodName) \
     extern "C" int DeviceClassLower##__##MethodName(mdsdsc_t * nid)      \
     {                                                                    \
-        Tree tree = mdsplus::Tree::GetActive();                          \
+        mdsplus::Tree tree = mdsplus::Tree::GetActive();                 \
         DeviceClass device(&tree, *(int *)nid->pointer);                 \
         try {                                                            \
             device.MethodName();                                         \
@@ -9194,6 +9341,7 @@ inline void String::setValue(const char * value, length_t length)
         (char *)value
     };
 
+    // TODO: Verify that this does free the existing XD
     int status = MdsCopyDxXd((mdsdsc_t *)&dsc, &_xd);
     if (IS_NOT_OK(status)) {
         throwException(status);
@@ -9406,7 +9554,7 @@ inline void Array::_setValues(DType dtype, const CType * values, const uint32_t 
 #endif // __cpp_lib_span
 
 template <typename CType>
-inline std::vector<CType> Array::_getVector() const {
+inline std::vector<CType> Array::_getValues() const {
     mdsdsc_a_t * dsc = getArrayDescriptor();
     if (dsc) {
         return std::vector<CType>(
@@ -9425,6 +9573,18 @@ inline const CType& Array::_getValueAt(size_t index) const {
     }
 
     throw TdiBadIndex();
+}
+
+template <typename CType>
+inline const CType& Array::_front() const
+{
+    return _getValueAt<CType>(0);
+}
+
+template <typename CType>
+inline const CType& Array::_back() const
+{
+    return _getValueAt<CType>(size() - 1);
 }
 
 template <typename CType>
@@ -9743,6 +9903,8 @@ ResultType TreeNode::doMethod(const std::string& method, const ArgTypes&... args
         dscList.push_back(arg.getDescriptor());
     }
 
+    _tree->setActive(); // HACK:
+
     DESCRIPTOR_NID(dscNID, &_nid);
     DESCRIPTOR_FROM_CSTRING(dscMethod, method.c_str());
     mdsdsc_xd_t out = MDSDSC_XD_INITIALIZER;
@@ -9832,7 +9994,6 @@ inline Data TreeNode::getRecord() const
     if (IS_NOT_OK(status)) {
         throwException(status);
     }
-    void putSegment(const Data& data, int index = -1);
 
     return Data(std::move(xd), getTree());
 }
@@ -10208,6 +10369,42 @@ void TreeNode::makeTimestampedSegment(
     }
 }
 
+template <typename ValueType>
+void TreeNode::setSegmentScale(const ValueType& value)
+{
+    DataView argValue(value);
+    int status = _TreeSetSegmentScale(getDBID(), getNID(), argValue.getDescriptor());
+    if (IS_NOT_OK(status)) {
+        throwException(status);
+    }
+}
+
+template <typename ResultType>
+ResultType TreeNode::getSegmentScale()
+{
+    mdsdsc_xd_t out = MDSDSC_XD_INITIALIZER;
+    int status = _TreeGetSegmentScale(getDBID(), getNID(), &out);
+    if (IS_NOT_OK(status)) {
+        throwException(status);
+    }
+    return Data(std::move(out), getTree()).releaseAndConvert<ResultType>();
+}
+
+inline Mode from_string(const std::string& mode)
+{
+    if (mode == "normal" || mode == "NORMAL") {
+        return Mode::Normal;
+    }
+    else if (mode == "edit" || mode == "EDIT") {
+        return Mode::Edit;
+    }
+    else if (mode == "new" || mode == "NEW") {
+        return Mode::Edit;
+    }
+
+    return Mode::ReadOnly;
+}
+
 inline void Tree::open()
 {
     int status;
@@ -10397,7 +10594,7 @@ inline ResultType Tree::_getDBI(int16_t code) const
         { 0, DbiEND_OF_LIST, nullptr, nullptr },
     };
 
-    int status = _TreeGetDbi(_tree->getDBID(), itm_lst);
+    int status = _TreeGetDbi(getDBID(), itm_lst);
     if (IS_NOT_OK(status)) {
         throwException(status);
     }
@@ -10416,7 +10613,7 @@ inline std::string Tree::_getStringDBI(int16_t code, int16_t size) const
         { 0, DbiEND_OF_LIST, nullptr, nullptr },
     };
 
-    int status = _TreeGetDbi(getTree()->getDBID(), itemList);
+    int status = _TreeGetDbi(getDBID(), itemList);
     if (IS_NOT_OK(status)) {
         throwException(status);
     }
@@ -10434,7 +10631,7 @@ inline void Tree::_setDBI(int16_t code, int value) const
         { 0, DbiEND_OF_LIST, nullptr, nullptr },
     };
 
-    int status = _TreeSetDbi(getTree()->getDBID(), itemList);
+    int status = _TreeSetDbi(getDBID(), itemList);
     if (IS_NOT_OK(status)) {
         throwException(status);
     }
@@ -10448,7 +10645,13 @@ inline void Device::addParts(std::vector<DevicePart>&& parts) const
     for (const auto& part : parts)
     {
         printf("Adding %s (%s)\n", part.Path.c_str(), to_string(part.Usage).c_str());
-        auto node = addNode(part.Path, part.Usage);
+        addNode(part.Path, part.Usage);
+    }
+
+    for (const auto& part : parts) {
+
+        printf("Setting %s (%s)\n", part.Path.c_str(), to_string(part.Usage).c_str());
+        auto node = getNode(part.Path);
 
         if (!part.ValueExpression.empty()) {
             node.putRecord(getTree()->compileData(part.ValueExpression));
@@ -10458,6 +10661,10 @@ inline void Device::addParts(std::vector<DevicePart>&& parts) const
         }
 
         node.setFlagsOn(part.Flags);
+
+        if (part.Callback) {
+            part.Callback(node);
+        }
     }
 
     for (auto& part : parts)
@@ -10642,7 +10849,8 @@ inline Data Connection::_get(const std::string& expression, std::vector<DataView
 
 namespace std {
 
-template <> struct hash<mdsplus::String>
+template <>
+struct hash<mdsplus::String>
 {
     size_t operator()(const mdsplus::String& data) const
     {
@@ -10654,70 +10862,80 @@ template <> struct hash<mdsplus::String>
     }
 };
 
-template <> struct hash<mdsplus::Int8>
+template <>
+struct hash<mdsplus::Int8>
 {
     size_t operator()(const mdsplus::Int8& data) const {
         return std::hash<mdsplus::Int8::__ctype>()(data.getValue());
     }
 };
 
-template <> struct hash<mdsplus::Int16>
+template <>
+struct hash<mdsplus::Int16>
 {
     size_t operator()(const mdsplus::Int16& data) const {
         return std::hash<mdsplus::Int16::__ctype>()(data.getValue());
     }
 };
 
-template <> struct hash<mdsplus::Int32>
+template <>
+struct hash<mdsplus::Int32>
 {
     size_t operator()(const mdsplus::Int32& data) const {
         return std::hash<mdsplus::Int32::__ctype>()(data.getValue());
     }
 };
 
-template <> struct hash<mdsplus::Int64>
+template <>
+struct hash<mdsplus::Int64>
 {
     size_t operator()(const mdsplus::Int64& data) const {
         return std::hash<mdsplus::Int64::__ctype>()(data.getValue());
     }
 };
 
-template <> struct hash<mdsplus::UInt8>
+template <>
+struct hash<mdsplus::UInt8>
 {
     size_t operator()(const mdsplus::UInt8& data) const {
         return std::hash<mdsplus::UInt8::__ctype>()(data.getValue());
     }
 };
 
-template <> struct hash<mdsplus::UInt16>
+template <>
+struct hash<mdsplus::UInt16>
 {
     size_t operator()(const mdsplus::UInt16& data) const {
         return std::hash<mdsplus::UInt16::__ctype>()(data.getValue());
     }
 };
 
-template <> struct hash<mdsplus::UInt32>
+template <>
+struct hash<mdsplus::UInt32>
 {
     size_t operator()(const mdsplus::UInt32& data) const {
         return std::hash<mdsplus::UInt32::__ctype>()(data.getValue());
     }
 };
 
-template <> struct hash<mdsplus::UInt64>
+template <>
+struct hash<mdsplus::UInt64>
 {
     size_t operator()(const mdsplus::UInt64& data) const {
         return std::hash<mdsplus::UInt64::__ctype>()(data.getValue());
     }
 };
 
-template <> struct hash<mdsplus::Float32>
+template <>
+struct hash<mdsplus::Float32>
 {
     size_t operator()(const mdsplus::Float32& data) const {
         return std::hash<mdsplus::Float32::__ctype>()(data.getValue());
     }
 };
 
-template <> struct hash<mdsplus::Float64>
+template <>
+struct hash<mdsplus::Float64>
 {
     size_t operator()(const mdsplus::Float64& data) const {
         return std::hash<mdsplus::Float64::__ctype>()(data.getValue());

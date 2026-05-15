@@ -84,7 +84,7 @@ inline void Array::_setValues(DType dtype, const CType * values, const uint32_t 
 #endif // __cpp_lib_span
 
 template <typename CType>
-inline std::vector<CType> Array::_getVector() const {
+inline std::vector<CType> Array::_getValues() const {
     mdsdsc_a_t * dsc = getArrayDescriptor();
     if (dsc) {
         return std::vector<CType>(
@@ -103,6 +103,18 @@ inline const CType& Array::_getValueAt(size_t index) const {
     }
 
     throw TdiBadIndex();
+}
+
+template <typename CType>
+inline const CType& Array::_front() const
+{
+    return _getValueAt<CType>(0);
+}
+
+template <typename CType>
+inline const CType& Array::_back() const
+{
+    return _getValueAt<CType>(size() - 1);
 }
 
 template <typename CType>

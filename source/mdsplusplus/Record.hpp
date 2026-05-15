@@ -391,6 +391,15 @@ public:
 
     MDSPLUS_RECORD_BOOTSTRAP(Function, DType::Function)
 
+    Function(opcode_t opcode)
+    {
+        DESCRIPTOR_FUNCTION_0(dsc, &opcode);
+        int status = MdsCopyDxXd((mdsdsc_t *)&dsc, &_xd);
+        if (IS_NOT_OK(status)) {
+            throwException(status);
+        }
+    }
+
     template <typename ...ArgTypes>
     Function(opcode_t opcode, const ArgTypes& ...args)
     {

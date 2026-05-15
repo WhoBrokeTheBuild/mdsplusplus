@@ -25,11 +25,12 @@ file(GLOB_RECURSE
 
 set(_single_header ${CMAKE_CURRENT_SOURCE_DIR}/include/mdsplus.hpp)
 set(_test_source ${CMAKE_CURRENT_SOURCE_DIR}/source/mdsplus.cpp)
+set(_gen_single_header ${CMAKE_CURRENT_SOURCE_DIR}/scripts/gen-single-header.py)
 
 add_custom_command(
     OUTPUT ${_single_header}
-    DEPENDS ${_source_list}
-    COMMAND ${Python_EXECUTABLE} scripts/gen-single-header.py
+    DEPENDS ${_source_list} ${_gen_single_header}
+    COMMAND ${Python_EXECUTABLE} ${_gen_single_header}
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )
 

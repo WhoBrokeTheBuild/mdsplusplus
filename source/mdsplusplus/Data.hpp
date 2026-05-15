@@ -194,18 +194,25 @@ public:
     Data& operator=(Data&) = delete;
 
     // Enable move operators
-    inline Data(Data&& other) {
+    inline Data(Data&& other)
+    {
         _xd = other._xd;
         other._xd = MDSDSC_XD_INITIALIZER;
+
         _tree = other._tree;
         other._tree = nullptr;
     }
 
-    Data& operator=(Data&& other) {
+    Data& operator=(Data&& other)
+    {
+        MdsFree1Dx(&_xd, nullptr);
+
         _xd = other._xd;
         other._xd = MDSDSC_XD_INITIALIZER;
+
         _tree = other._tree;
         other._tree = nullptr;
+        
         return *this;
     }
 
@@ -598,19 +605,5 @@ inline Data Data::FromScalar(std::nullptr_t) {
 }
 
 } // namespace mdsplus
-
-// namespace std {
-
-// template <> struct hash<mdsplus::Data>
-// {
-//     size_t operator()(const mdsplus::Data& data) const {
-//         // TODO: Improve?
-//         return (ptrdiff_t)data.getDescriptor();
-//     }
-// };
-
-// // TODO: Define all types?
-
-// } // namespace std
 
 #endif // MDSPLUS_DATA_HPP

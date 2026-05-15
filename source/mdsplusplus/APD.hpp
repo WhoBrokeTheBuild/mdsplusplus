@@ -51,7 +51,7 @@ protected:
 
     inline void _append(DType dtype, std::vector<mdsdsc_t *> values)
     {
-        std::vector<mdsdsc_t *> dscList = _getVector<mdsdsc_t *>();
+        std::vector<mdsdsc_t *> dscList = _getValues<mdsdsc_t *>();
         dscList.reserve(dscList.size() + values.size());
         dscList.insert(dscList.end(), values.begin(), values.end());
         
@@ -114,7 +114,7 @@ public:
         #ifdef __cpp_lib_span
             std::span<mdsdsc_t *> dscList = _getSpan<mdsdsc_t *>();
         #else
-            std::vector<mdsdsc_t *> dscList = _getVector<mdsdsc_t *>();
+            std::vector<mdsdsc_t *> dscList = _getValues<mdsdsc_t *>();
         #endif
 
         std::vector<Data> values;
@@ -223,7 +223,7 @@ public:
     {
         assert(keys.size() == values.size());
 
-        std::vector<mdsdsc_t *> dscList = _getVector<mdsdsc_t *>();
+        std::vector<mdsdsc_t *> dscList = _getValues<mdsdsc_t *>();
         for (size_t i = 0; i < keys.size(); ++i) {
             dscList.push_back(keys[i].getDescriptor());
             dscList.push_back(values[i].getDescriptor());
@@ -261,7 +261,7 @@ public:
         #ifdef __cpp_lib_span
             std::span<mdsdsc_t *> dscList = _getSpan<mdsdsc_t *>();
         #else
-            std::vector<mdsdsc_t *> dscList = _getVector<mdsdsc_t *>();
+            std::vector<mdsdsc_t *> dscList = _getValues<mdsdsc_t *>();
         #endif
 
         assert((dscList.size() % 2) == 0);
@@ -299,7 +299,7 @@ public:
         #ifdef __cpp_lib_span
             std::span<mdsdsc_t *> dscList = _getSpan<mdsdsc_t *>();
         #else
-            std::vector<mdsdsc_t *> dscList = _getVector<mdsdsc_t *>();
+            std::vector<mdsdsc_t *> dscList = _getValues<mdsdsc_t *>();
         #endif
         
         assert((dscList.size() % 2) == 0);

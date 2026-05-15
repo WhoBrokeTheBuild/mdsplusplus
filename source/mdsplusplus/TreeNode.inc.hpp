@@ -260,6 +260,8 @@ ResultType TreeNode::doMethod(const std::string& method, const ArgTypes&... args
     for (const auto& arg : argList) {
         dscList.push_back(arg.getDescriptor());
     }
+    
+    _tree->setActive(); // HACK:
 
     DESCRIPTOR_NID(dscNID, &_nid);
     DESCRIPTOR_FROM_CSTRING(dscMethod, method.c_str());
@@ -350,7 +352,6 @@ inline Data TreeNode::getRecord() const
     if (IS_NOT_OK(status)) {
         throwException(status);
     }
-    void putSegment(const Data& data, int index = -1);
 
     return Data(std::move(xd), getTree());
 }
@@ -724,6 +725,27 @@ void TreeNode::makeTimestampedSegment(
     if (IS_NOT_OK(status)) {
         throwException(status);
     }
+}
+
+template <typename ValueType>
+void TreeNode::setSegmentScale(const ValueType& value)
+{
+    DataView argValue(value);
+    int status = _TreeSetSegmentScale(getDBID(), getNID(), argValue.getDescriptor());
+    if (IS_NOT_OK(status)) {
+        throwException(status);
+    }
+}
+
+template <typename ResultType>
+ResultType TreeNode::getSegmentScale()
+{
+    mdsdsc_xd_t out = MDSDSC_XD_INITIALIZER;
+    int status = _TreeGetSegmentScale(getDBID(), getNID(), &out);
+    if (IS_NOT_OK(status)) {
+        throwException(status);
+    }
+    return Data(std::move(out), getTree()).releaseAndConvert<ResultType>();
 }
 
 } // namespace mdsplus

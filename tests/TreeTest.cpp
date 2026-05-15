@@ -63,6 +63,7 @@ protected:
 
         tree.addNode("RECORD", Usage::Structure);
         tree.addNode("RECORD:ADD", Usage::Numeric).putRecord(Function(OPC_ADD, tree.getNode("A:B"), 42));
+        tree.addNode("RECORD:SIG", Usage::Signal);
 
         tree.write();
     }
@@ -147,6 +148,24 @@ TEST_F(TreeFixture, GetScalar)
     ASSERT_EQ(tree.getNode("SCALAR:QU").getData(), UInt64(42));
     ASSERT_EQ(tree.getNode("SCALAR:FLOAT").getData(), Float32(4.2f));
     ASSERT_EQ(tree.getNode("SCALAR:DOUBLE").getData(), Float64(0.00042));
+}
+
+TEST_F(TreeFixture, Josh)
+{
+    Tree tree(TREE_NAME, SHOT, Mode::Normal);
+
+    auto node = tree.getNode("RECORD:SIG");
+
+    std::vector<uint8_t> bytes;
+    bytes.resize(10);
+    
+    // UInt8Array frames(bytes, { 6 * 4, 10 });
+
+    node.makeSegment(0, 10, Range(0., 1., 0.1), bytes);
+    node.makeSegment(10, 20, Range(1., 2., 0.1), bytes);
+
+    auto data = node.getData();
+    printf("%s\n", to_string(data).c_str());
 }
 
 int main(int argc, char * argv[])

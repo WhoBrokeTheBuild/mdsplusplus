@@ -7,6 +7,21 @@
 
 namespace mdsplus {
 
+inline Mode from_string(const std::string& mode)
+{
+    if (mode == "normal" || mode == "NORMAL") {
+        return Mode::Normal;
+    }
+    else if (mode == "edit" || mode == "EDIT") {
+        return Mode::Edit;
+    }
+    else if (mode == "new" || mode == "NEW") {
+        return Mode::Edit;
+    }
+    
+    return Mode::ReadOnly;
+}
+
 inline void Tree::open()
 {
     int status;
@@ -196,7 +211,7 @@ inline ResultType Tree::_getDBI(int16_t code) const
         { 0, DbiEND_OF_LIST, nullptr, nullptr },
     };
 
-    int status = _TreeGetDbi(_tree->getDBID(), itm_lst);
+    int status = _TreeGetDbi(getDBID(), itm_lst);
     if (IS_NOT_OK(status)) {
         throwException(status);
     }
@@ -215,7 +230,7 @@ inline std::string Tree::_getStringDBI(int16_t code, int16_t size) const
         { 0, DbiEND_OF_LIST, nullptr, nullptr },
     };
 
-    int status = _TreeGetDbi(getTree()->getDBID(), itemList);
+    int status = _TreeGetDbi(getDBID(), itemList);
     if (IS_NOT_OK(status)) {
         throwException(status);
     }
@@ -233,7 +248,7 @@ inline void Tree::_setDBI(int16_t code, int value) const
         { 0, DbiEND_OF_LIST, nullptr, nullptr },
     };
 
-    int status = _TreeSetDbi(getTree()->getDBID(), itemList);
+    int status = _TreeSetDbi(getDBID(), itemList);
     if (IS_NOT_OK(status)) {
         throwException(status);
     }

@@ -28,6 +28,29 @@ public:
         : TreeNode(tree, nid)
     { }
 
+    template <typename DeviceClass,
+        std::enable_if_t<std::is_base_of<Device, DeviceClass>::value, bool> = true>
+    static DeviceClass Add(Tree * tree, const std::string& name)
+    {
+        int nid = 0;
+        DESCRIPTOR_FROM_CSTRING(dscLibrary, DeviceClass::__library_name);
+        DESCRIPTOR_FROM_CSTRING(dscModel, DeviceClass::__class_name);
+        static DESCRIPTOR_CONGLOM(dscConglom, &dscLibrary, &dscModel, 0, 0);
+
+        std::vector<mdsplus::DevicePart> parts = DeviceClass::GetParts();
+
+        _TreeStartConglomerate(tree->getDBID(), parts.size() + 1);
+        _TreeAddNode(tree->getDBID(), name.c_str(), &nid, TreeUSAGE_DEVICE);
+        _TreePutRecord(tree->getDBID(), nid, (mdsdsc_t *)&dscConglom, 0);
+
+        DeviceClass device(tree, nid);
+        device.addParts(std::move(parts));
+
+        _TreeEndConglomerate(tree->getDBID());
+
+        return device;
+    }
+
     static std::vector<DevicePart> GetParts() {
         return {};
     }
@@ -36,43 +59,38 @@ public:
 
 };
 
-#define MDSPLUS_DEVICE_BOOTSTRAP(DeviceClass) \
-    DeviceClass(Tree * tree, int nid) \
-        : Device(tree, nid) \
-    { } \
-    virtual ~DeviceClass() = default; \
+// TODO: Error handling
 
-#define MDSPLUS_DEVICE(LibraryName, DeviceClass, DeviceClassLower)               \
-    extern "C" int DeviceClassLower##__add(                                      \
-        mdsdsc_t * dscName,                                                      \
-        mdsdsc_t * dscDummy,                                                     \
-        int * nidOut)                                                            \
-    {                                                                            \
-        (void)dscDummy;                                                          \
-        int nidHead = 0;                                                         \
-        static DESCRIPTOR(dscLibrary, LibraryName);                              \
-        static DESCRIPTOR(dscModel, #DeviceClass);                               \
-        mdsdsc_t * dscLibraryPtr = (dscLibrary.pointer ? &dscLibrary : nullptr); \
-        static DESCRIPTOR_CONGLOM(dscConglom, dscLibraryPtr, &dscModel, 0, 0);   \
-        std::vector<mdsplus::DevicePart> parts = DeviceClass::GetParts();        \
-        TreeStartConglomerate(parts.size() + 1);                                 \
-        std::string name(dscName->pointer, dscName->length);                     \
-        TreeAddNode(name.c_str(), &nidHead, TreeUSAGE_DEVICE);                   \
-        TreePutRecord(nidHead, (mdsdsc_t *)&dscConglom, 0);                      \
-        Tree tree = mdsplus::Tree::GetActive();                                  \
-        DeviceClass device(&tree, nidHead);                                      \
-        device.addParts(std::move(parts));                                       \
-        TreeEndConglomerate();                                                   \
-        if (nidOut) {                                                            \
-            *nidOut = nidHead;                                                   \
-        }                                                                        \
-        return TreeSUCCESS;                                                      \
+#define MDSPLUS_DEVICE_BOOTSTRAP(LibraryName, DeviceClass, DeviceClassLower) \
+    static inline const char * __library_name = #LibraryName;                \
+    static inline const char * __class_name = #DeviceClass;                  \
+    static inline const char * __class_name_lower = #DeviceClassLower;       \
+                                                                             \
+    DeviceClass(Tree * tree, int nid)                                        \
+        : Device(tree, nid)                                                  \
+    { }                                                                      \
+    virtual ~DeviceClass() = default;                                        \
+
+#define MDSPLUS_DEVICE(DeviceClassLower, DeviceClass)               \
+    extern "C" int DeviceClassLower##__add(                         \
+        mdsdsc_t * dscName,                                         \
+        mdsdsc_t * dscDummy,                                        \
+        int * nidOut)                                               \
+    {                                                               \
+        (void)dscDummy;                                             \
+        Tree tree = mdsplus::Tree::GetActive();                     \
+        std::string name(dscName->pointer, dscName->length);        \
+        const auto& device = Device::Add<DeviceClass>(&tree, name); \
+        if (nidOut) {                                               \
+            *nidOut = device.getNID();                              \
+        }                                                           \
+        return TreeSUCCESS;                                         \
     }
 
 #define MDSPLUS_DEVICE_METHOD(DeviceClassLower, DeviceClass, MethodName) \
     extern "C" int DeviceClassLower##__##MethodName(mdsdsc_t * nid)      \
     {                                                                    \
-        Tree tree = mdsplus::Tree::GetActive();                          \
+        mdsplus::Tree tree = mdsplus::Tree::GetActive();                 \
         DeviceClass device(&tree, *(int *)nid->pointer);                 \
         try {                                                            \
             device.MethodName();                                         \

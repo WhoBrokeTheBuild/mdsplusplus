@@ -247,7 +247,8 @@ _MDSPLUS_SCALAR_CUSTOMIZATION(Complex64)
 namespace std {
 
 #define _MDSPLUS_SPECIALIZE_STD_HASH(ScalarType)                      \
-    template <> struct hash<ScalarType>                               \
+    template <>                                                       \
+    struct hash<ScalarType>                                           \
     {                                                                 \
         size_t operator()(const ScalarType& data) const {             \
             return std::hash<ScalarType::__ctype>()(data.getValue()); \

@@ -138,7 +138,7 @@ protected:
     void _setValues(DType dtype, const CType * values, const uint32_t * dims, dimct_t dimCount);
 
     template <typename CType>
-    std::vector<CType> _getVector() const;
+    std::vector<CType> _getValues() const;
 
     template <typename CType>
     const CType& _getValueAt(size_t index) const;
@@ -149,6 +149,12 @@ protected:
     inline const CType& _at(size_t index) const {
         return _getValueAt<CType>(index);
     }
+
+    template <typename CType>
+    const CType& _front() const;
+
+    template <typename CType>
+    const CType& _back() const;
 
     template <typename CType>
     CType * _begin() const;
@@ -250,13 +256,8 @@ protected:
     }                                                                              \
                                                                                    \
     [[nodiscard]]                                                                  \
-    inline std::vector<__ctype> getVector() const {                                \
-        return _getVector<__ctype>();                                              \
-    }                                                                              \
-                                                                                   \
-    [[nodiscard]]                                                                  \
     inline std::vector<__ctype> getValues() const {                                \
-        return getVector();                                                        \
+        return _getValues<__ctype>();                                              \
     }                                                                              \
                                                                                    \
     [[nodiscard]]                                                                  \
@@ -284,6 +285,16 @@ protected:
         dimct_t dimCount                                                           \
     ) {                                                                            \
         _setValues(__dtype, values, dims, dimCount);                               \
+    }                                                                              \
+                                                                                   \
+    [[nodiscard]]                                                                  \
+    inline const __ctype& front() const {                                          \
+        return _front<__ctype>();                                                  \
+    }                                                                              \
+                                                                                   \
+    [[nodiscard]]                                                                  \
+    inline const __ctype& back() const {                                           \
+        return _back<__ctype>();                                                   \
     }                                                                              \
                                                                                    \
     [[nodiscard]]                                                                  \
