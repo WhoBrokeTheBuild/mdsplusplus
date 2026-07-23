@@ -4,8 +4,31 @@
 #include "Tree.hpp"
 #include "TreeNode.hpp"
 #include "DataView.hpp"
+#include "String.hpp"
 
 namespace mdsplus {
+
+inline std::vector<int> Tree::getShotDB(
+    const std::string& treename,
+    const std::string& path /*= ""*/,
+    int lower /*= INT_MIN */,
+    int higher /*= INT_MAX */
+) {
+    // TODO:
+    return {};
+}
+
+inline std::string Tree::getFileName(const std::string& subtree /*= {}*/)
+{
+    mdsdsc_xd_t out = MDSDSC_XD_INITIALIZER;
+    const char * treename = (subtree.empty() ? nullptr : subtree.c_str());
+    int status = _TreeFileName(getDBID(), const_cast<char *>(treename), getShot(), &out);
+    if (IS_NOT_OK(status)) {
+        throwException(status);
+    }
+
+    return Data(std::move(out)).releaseAndConvert<String>().getString();
+}
 
 inline Mode from_string(const std::string& mode)
 {
@@ -22,13 +45,37 @@ inline Mode from_string(const std::string& mode)
     return Mode::ReadOnly;
 }
 
-inline void Tree::open()
+inline void Tree::open(const std::string& treename, int shot, Mode mode /*= Mode::Normal*/)
 {
     int status;
 
-    if (_open) {
+    if (mode == Mode::View) {
+        return;
+    }
+
+    if (_dbid != nullptr) {
         close();
     }
+
+    _treename = treename;
+    _shot = shot;
+    _mode = mode;
+    
+    std::string env_name;
+    const char * old_path = nullptr;
+    if (!_path.empty()) {
+        std::string lower(_treename);
+        for (auto& c : lower) {
+            c = ::tolower(c);
+        }
+
+        std::string env_name = lower + "_path";
+
+        old_path = ::getenv(env_name.c_str());
+        ::setenv(env_name.c_str(), _path.c_str(), true);
+    }
+
+    printf("%d\n", _shot);
 
     switch (_mode) {
     case Mode::Normal:
@@ -46,6 +93,15 @@ inline void Tree::open()
     default: ;
     }
 
+    if (!_path.empty()) {
+        if (old_path) {
+            ::setenv(env_name.c_str(), old_path, true);
+        }
+        else {
+            ::unsetenv(env_name.c_str());
+        }
+    }
+
     if (IS_NOT_OK(status)) {
         throwException(status);
     }
@@ -53,8 +109,6 @@ inline void Tree::open()
     // Initialize TreeNode parent class to \\TOP
     _tree = this;
     _nid = 0;
-
-    _open = true;
 }
 
 inline void Tree::close()
@@ -67,8 +121,6 @@ inline void Tree::close()
     // Cleanup TreeNode
     _tree = nullptr;
     _nid = -1;
-
-    _open = false;
 }
 
 inline void Tree::write()
@@ -163,7 +215,7 @@ inline TreeNode Tree::getDefaultNode() const
 }
 
 template <typename ResultType /*= Data*/, typename ...ArgTypes>
-ResultType Tree::compileData(const std::string& expression, ArgTypes... args) const
+ResultType Tree::compileData(const std::string& expression, const ArgTypes&... args) const
 {
     DataView argExp(expression);
     std::vector<DataView> argList = { DataView(args)... };
@@ -183,7 +235,7 @@ ResultType Tree::compileData(const std::string& expression, ArgTypes... args) co
 }
 
 template <typename ResultType /*= Data*/, typename ...ArgTypes>
-ResultType Tree::executeData(const std::string& expression, ArgTypes... args) const
+ResultType Tree::executeData(const std::string& expression, const ArgTypes&... args) const
 {
     DataView argExp(expression);
     std::vector<DataView> argList = { DataView(args)... };

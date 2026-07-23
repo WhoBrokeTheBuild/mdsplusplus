@@ -3,10 +3,14 @@
 
 #include "TreeNode.hpp"
 
+#include <climits>
+
 extern "C" {
 
     #include <treeshr.h>
     #include <dbidef.h>
+
+    int _TreeFileName(void *, char *, int, struct descriptor_xd *);
 
 } // extern "C"
 
@@ -26,48 +30,79 @@ enum class Mode
 std::string to_string(const Mode& mode);
 Mode from_string(const std::string& mode); // TODO: Rename?
 
+// TODO: TreeView class
+
 class Tree : public TreeNode
 {
 public:
 
+    // TODO: Rename public? global? ~~current~~? 
     static Tree GetActive() {
-        char name[64];
-        int shot;
-        int retNameLength;
-
-        DBI_ITM itmList[] = {
-            { sizeof(name), DbiNAME, name, &retNameLength, },
-            { sizeof(shot), DbiSHOTID, &shot, nullptr, },
-            { 0, DbiEND_OF_LIST, nullptr, nullptr, },
-        };
-        int status = TreeGetDbi(itmList);
-        if (IS_NOT_OK(status)) {
-            throwException(status);
-        }
-
-        return Tree(std::string(name, retNameLength), shot, TreeDbid());
+        return Tree(TreeDbid());
     }
-
     inline void setActive() {
         TreeSwitchDbid(getDBID());
     }
 
+    static std::vector<int> getShotDB(
+        const std::string& treename,
+        const std::string& path = "",
+        int lower = INT_MIN,
+        int higher = INT_MAX
+    );
+
     Tree() = default;
 
-    Tree(const std::string& treename, int shot, Mode mode = Mode::Normal)
-        : _treename(treename)
-        , _shot(shot)
-        , _mode(mode)
+    inline Tree(const std::string& treename, int shot, Mode mode = Mode::Normal, const std::string& path = {})
+        : _path(path)
     {
-        open();
+        open(treename, shot, mode);
     }
 
-    Tree(const std::string& treename, int shot, void * dbid)
-        : _treename(treename)
-        , _shot(shot)
-        , _mode(Mode::View)
+    inline Tree(void * dbid)
+        : _mode(Mode::View)
         , _dbid(dbid)
-    { }
+    {   
+        // TODO: Review
+
+        char name[64];
+        int retNameLength;
+        DBI_ITM itmList[] = {
+            { sizeof(name), DbiNAME, name, &retNameLength, },
+            { sizeof(_shot), DbiSHOTID, &_shot, nullptr, },
+            { 0, DbiEND_OF_LIST, nullptr, nullptr, },
+        };
+
+        _treename = std::string(name, retNameLength);
+
+        int status = TreeGetDbi(itmList);
+        if (IS_NOT_OK(status)) {
+            throwException(status);
+        }
+    }
+
+    // Disallow copy constructor and assignment operator
+    Tree(const Tree&) = delete;
+    Tree& operator=(const Tree&) = delete;
+
+    inline Tree(Tree&& other)
+    {
+        // TODO: Improve
+        std::swap(_treename, other._treename);
+        std::swap(_shot, other._shot);
+        std::swap(_mode, other._mode);
+        std::swap(_dbid, other._dbid);
+    }
+
+    inline Tree& operator=(Tree&& other)
+    {
+        // TODO: Improve
+        std::swap(_treename, other._treename);
+        std::swap(_shot, other._shot);
+        std::swap(_mode, other._mode);
+        std::swap(_dbid, other._dbid);
+        return *this;
+    }
 
     inline ~Tree()
     {
@@ -104,18 +139,17 @@ public:
         return _mode;
     }
 
-    inline void open(const std::string& treename, int shot, Mode mode = Mode::Normal)
-    {
-        _treename = treename;
-        _shot = shot;
-        _mode = mode;
-
-        return open();
+    inline int64_t getDatafileSize() {
+        return _TreeGetDatafileSize(getDBID());
     }
 
-    void open();
+    std::string getFileName(const std::string& subtree = {});
 
-    inline void reopen() { open(); }
+    void open(const std::string& treename, int shot, Mode mode = Mode::Normal);
+
+    inline void reopen() {
+        open(getTreeName(), getShot(), getMode());
+    }
 
     void close();
 
@@ -132,7 +166,7 @@ public:
     }
 
     bool isOpen() const {
-        return _open;
+        return (_dbid != nullptr);
     }
 
     bool isOpenForEdit() const {
@@ -148,7 +182,7 @@ public:
     }
 
     void setReadOnly() {
-        if (_open) {
+        if (_dbid != nullptr) {
             _setDBI(DbiREADONLY, true);
 
             if (_mode != Mode::View) {
@@ -190,16 +224,16 @@ public:
     TreeNode getDefaultNode() const;
 
     template <typename ResultType = Data, typename ...ArgTypes>
-    ResultType compileData(const std::string& expression, ArgTypes... args) const;
+    ResultType compileData(const std::string& expression, const ArgTypes&... args) const;
 
     template <typename ResultType = Data, typename ...ArgTypes>
-    ResultType executeData(const std::string& expression, ArgTypes... args) const;
+    ResultType executeData(const std::string& expression, const ArgTypes&... args) const;
 
 private:
 
     void * _dbid = nullptr;
 
-    bool _open = false;
+    std::string _path;
 
     std::string _treename;
 

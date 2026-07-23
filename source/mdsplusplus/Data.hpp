@@ -172,7 +172,7 @@ public:
     );
 
     template <typename ResultType = Data, typename ...ArgTypes>
-    static inline ResultType FromExpression(const std::string& expression, ArgTypes... args) {
+    static inline ResultType FromExpression(const std::string& expression, const ArgTypes&... args) {
         return Execute<ResultType>(expression, args...);
     }
 

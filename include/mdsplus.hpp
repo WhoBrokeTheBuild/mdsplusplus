@@ -24,6 +24,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <climits>
 #include <complex>
 #include <cstdint>
 #include <cstring>
@@ -67,6 +68,8 @@ extern "C" {
     int TdiCall(dtype_t rtype, int narg, mdsdsc_t *list[], mdsdsc_xd_t *out_ptr);
     int _TdiIntrinsic(void **ctx, opcode_t opcode, int narg, mdsdsc_t *list[], mdsdsc_xd_t *out_ptr);
     int TdiIntrinsic(opcode_t opcode, int narg, mdsdsc_t *list[], mdsdsc_xd_t *out_ptr);
+
+    int _TreeFileName(void *, char *, int, struct descriptor_xd *);
 
     // Needed for mdsdsc*_t, <dtypedef.h>, <classdef.h>
 
@@ -3194,7 +3197,7 @@ public:
     );
 
     template <typename ResultType = Data, typename ...ArgTypes>
-    static inline ResultType FromExpression(const std::string& expression, ArgTypes... args) {
+    static inline ResultType FromExpression(const std::string& expression, const ArgTypes&... args) {
         return Execute<ResultType>(expression, args...);
     }
 
@@ -4314,48 +4317,79 @@ enum class Mode
 std::string to_string(const Mode& mode);
 Mode from_string(const std::string& mode); // TODO: Rename?
 
+// TODO: TreeView class
+
 class Tree : public TreeNode
 {
 public:
 
+    // TODO: Rename public? global? ~~current~~?
     static Tree GetActive() {
-        char name[64];
-        int shot;
-        int retNameLength;
-
-        DBI_ITM itmList[] = {
-            { sizeof(name), DbiNAME, name, &retNameLength, },
-            { sizeof(shot), DbiSHOTID, &shot, nullptr, },
-            { 0, DbiEND_OF_LIST, nullptr, nullptr, },
-        };
-        int status = TreeGetDbi(itmList);
-        if (IS_NOT_OK(status)) {
-            throwException(status);
-        }
-
-        return Tree(std::string(name, retNameLength), shot, TreeDbid());
+        return Tree(TreeDbid());
     }
-
     inline void setActive() {
         TreeSwitchDbid(getDBID());
     }
 
+    static std::vector<int> getShotDB(
+        const std::string& treename,
+        const std::string& path = "",
+        int lower = INT_MIN,
+        int higher = INT_MAX
+    );
+
     Tree() = default;
 
-    Tree(const std::string& treename, int shot, Mode mode = Mode::Normal)
-        : _treename(treename)
-        , _shot(shot)
-        , _mode(mode)
+    inline Tree(const std::string& treename, int shot, Mode mode = Mode::Normal, const std::string& path = {})
+        : _path(path)
     {
-        open();
+        open(treename, shot, mode);
     }
 
-    Tree(const std::string& treename, int shot, void * dbid)
-        : _treename(treename)
-        , _shot(shot)
-        , _mode(Mode::View)
+    inline Tree(void * dbid)
+        : _mode(Mode::View)
         , _dbid(dbid)
-    { }
+    {
+        // TODO: Review
+
+        char name[64];
+        int retNameLength;
+        DBI_ITM itmList[] = {
+            { sizeof(name), DbiNAME, name, &retNameLength, },
+            { sizeof(_shot), DbiSHOTID, &_shot, nullptr, },
+            { 0, DbiEND_OF_LIST, nullptr, nullptr, },
+        };
+
+        _treename = std::string(name, retNameLength);
+
+        int status = TreeGetDbi(itmList);
+        if (IS_NOT_OK(status)) {
+            throwException(status);
+        }
+    }
+
+    // Disallow copy constructor and assignment operator
+    Tree(const Tree&) = delete;
+    Tree& operator=(const Tree&) = delete;
+
+    inline Tree(Tree&& other)
+    {
+        // TODO: Improve
+        std::swap(_treename, other._treename);
+        std::swap(_shot, other._shot);
+        std::swap(_mode, other._mode);
+        std::swap(_dbid, other._dbid);
+    }
+
+    inline Tree& operator=(Tree&& other)
+    {
+        // TODO: Improve
+        std::swap(_treename, other._treename);
+        std::swap(_shot, other._shot);
+        std::swap(_mode, other._mode);
+        std::swap(_dbid, other._dbid);
+        return *this;
+    }
 
     inline ~Tree()
     {
@@ -4392,18 +4426,17 @@ public:
         return _mode;
     }
 
-    inline void open(const std::string& treename, int shot, Mode mode = Mode::Normal)
-    {
-        _treename = treename;
-        _shot = shot;
-        _mode = mode;
-
-        return open();
+    inline int64_t getDatafileSize() {
+        return _TreeGetDatafileSize(getDBID());
     }
 
-    void open();
+    std::string getFileName(const std::string& subtree = {});
 
-    inline void reopen() { open(); }
+    void open(const std::string& treename, int shot, Mode mode = Mode::Normal);
+
+    inline void reopen() {
+        open(getTreeName(), getShot(), getMode());
+    }
 
     void close();
 
@@ -4420,7 +4453,7 @@ public:
     }
 
     bool isOpen() const {
-        return _open;
+        return (_dbid != nullptr);
     }
 
     bool isOpenForEdit() const {
@@ -4436,7 +4469,7 @@ public:
     }
 
     void setReadOnly() {
-        if (_open) {
+        if (_dbid != nullptr) {
             _setDBI(DbiREADONLY, true);
 
             if (_mode != Mode::View) {
@@ -4478,16 +4511,16 @@ public:
     TreeNode getDefaultNode() const;
 
     template <typename ResultType = Data, typename ...ArgTypes>
-    ResultType compileData(const std::string& expression, ArgTypes... args) const;
+    ResultType compileData(const std::string& expression, const ArgTypes&... args) const;
 
     template <typename ResultType = Data, typename ...ArgTypes>
-    ResultType executeData(const std::string& expression, ArgTypes... args) const;
+    ResultType executeData(const std::string& expression, const ArgTypes&... args) const;
 
 private:
 
     void * _dbid = nullptr;
 
-    bool _open = false;
+    std::string _path;
 
     std::string _treename;
 
@@ -8912,7 +8945,7 @@ public:
         int * nidOut)                                               \
     {                                                               \
         (void)dscDummy;                                             \
-        Tree tree = mdsplus::Tree::GetActive();                     \
+        mdsplus::Tree tree(TreeDbid());                             \
         std::string name(dscName->pointer, dscName->length);        \
         const auto& device = Device::Add<DeviceClass>(&tree, name); \
         if (nidOut) {                                               \
@@ -8924,7 +8957,7 @@ public:
 #define MDSPLUS_DEVICE_METHOD(DeviceClassLower, DeviceClass, MethodName) \
     extern "C" int DeviceClassLower##__##MethodName(mdsdsc_t * nid)      \
     {                                                                    \
-        mdsplus::Tree tree = mdsplus::Tree::GetActive();                 \
+        mdsplus::Tree tree(TreeDbid());                                  \
         DeviceClass device(&tree, *(int *)nid->pointer);                 \
         try {                                                            \
             device.MethodName();                                         \
@@ -10390,6 +10423,29 @@ ResultType TreeNode::getSegmentScale()
     return Data(std::move(out), getTree()).releaseAndConvert<ResultType>();
 }
 
+inline std::vector<int> Tree::getShotDB(
+    const std::string& treename,
+    const std::string& path /*= ""*/,
+    int lower /*= INT_MIN */,
+    int higher /*= INT_MAX */
+) {
+    // TODO:
+    return {};
+}
+
+inline std::string Tree::getFileName(const std::string& subtree /*= {}*/)
+{
+    // Even with the DBID we may want to ask about subtrees, so we still pass _treename
+    mdsdsc_xd_t out = MDSDSC_XD_INITIALIZER;
+    const char * treename = (subtree.empty() ? nullptr : subtree.c_str());
+    int status = _TreeFileName(getDBID(), const_cast<char *>(treename), getShot(), &out);
+    if (IS_NOT_OK(status)) {
+        throwException(status);
+    }
+
+    return Data(std::move(out)).releaseAndConvert<String>().getString();
+}
+
 inline Mode from_string(const std::string& mode)
 {
     if (mode == "normal" || mode == "NORMAL") {
@@ -10405,13 +10461,37 @@ inline Mode from_string(const std::string& mode)
     return Mode::ReadOnly;
 }
 
-inline void Tree::open()
+inline void Tree::open(const std::string& treename, int shot, Mode mode /*= Mode::Normal*/)
 {
     int status;
 
-    if (_open) {
+    if (mode == Mode::View) {
+        return;
+    }
+
+    if (_dbid != nullptr) {
         close();
     }
+
+    _treename = treename;
+    _shot = shot;
+    _mode = mode;
+
+    std::string env_name;
+    const char * old_path = nullptr;
+    if (!_path.empty()) {
+        std::string lower(_treename);
+        for (auto& c : lower) {
+            c = ::tolower(c);
+        }
+
+        std::string env_name = lower + "_path";
+
+        old_path = ::getenv(env_name.c_str());
+        ::setenv(env_name.c_str(), _path.c_str(), true);
+    }
+
+    printf("%d\n", _shot);
 
     switch (_mode) {
     case Mode::Normal:
@@ -10429,6 +10509,15 @@ inline void Tree::open()
     default: ;
     }
 
+    if (!_path.empty()) {
+        if (old_path) {
+            ::setenv(env_name.c_str(), old_path, true);
+        }
+        else {
+            ::unsetenv(env_name.c_str());
+        }
+    }
+
     if (IS_NOT_OK(status)) {
         throwException(status);
     }
@@ -10436,8 +10525,6 @@ inline void Tree::open()
     // Initialize TreeNode parent class to \\TOP
     _tree = this;
     _nid = 0;
-
-    _open = true;
 }
 
 inline void Tree::close()
@@ -10450,8 +10537,6 @@ inline void Tree::close()
     // Cleanup TreeNode
     _tree = nullptr;
     _nid = -1;
-
-    _open = false;
 }
 
 inline void Tree::write()
@@ -10546,7 +10631,7 @@ inline TreeNode Tree::getDefaultNode() const
 }
 
 template <typename ResultType /*= Data*/, typename ...ArgTypes>
-ResultType Tree::compileData(const std::string& expression, ArgTypes... args) const
+ResultType Tree::compileData(const std::string& expression, const ArgTypes&... args) const
 {
     DataView argExp(expression);
     std::vector<DataView> argList = { DataView(args)... };
@@ -10566,7 +10651,7 @@ ResultType Tree::compileData(const std::string& expression, ArgTypes... args) co
 }
 
 template <typename ResultType /*= Data*/, typename ...ArgTypes>
-ResultType Tree::executeData(const std::string& expression, ArgTypes... args) const
+ResultType Tree::executeData(const std::string& expression, const ArgTypes&... args) const
 {
     DataView argExp(expression);
     std::vector<DataView> argList = { DataView(args)... };

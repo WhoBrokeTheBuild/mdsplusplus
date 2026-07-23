@@ -11,6 +11,7 @@
 #   MDSplus_TreeShr_LIBRARY
 #   MDSplus_TdiShr_LIBRARY
 #   MDSplus_MdsLib_LIBRARY
+#   MDSplus_MdsIpShr_LIBRARY
 #   MDSplus_MdsObjectsCppShr_LIBRARY
 #   MDSplus_PYTHONPATH
 #   MDSplus_tditest_EXECUTABLE
@@ -292,3 +293,27 @@ if(MDSplus_FOUND)
     )
 
 endif()
+
+mark_as_advanced(
+    MDSPLUS_ROOT
+    MDSPLUS_DIR
+    MDSplus_INCLUDE_DIRS
+    MDSplus_MdsShr_LIBRARY
+    MDSplus_TreeShr_LIBRARY
+    MDSplus_TdiShr_LIBRARY
+    MDSplus_MdsLib_LIBRARY
+    MDSplus_MdsIpShr_LIBRARY
+    MDSplus_MdsObjectsCppShr_LIBRARY
+    MDSplus_PYTHONPATH
+    MDSplus_tditest_EXECUTABLE
+    MDSplus_tdic_EXECUTABLE
+    MDSplus_mdstcl_EXECUTABLE
+    MDSplus_mdsdcl_EXECUTABLE
+    MDSplus_setevent_EXECUTABLE
+    MDSplus_wfevent_EXECUTABLE
+    MDSplus_dwscope_EXECUTABLE
+    MDSplus_traverser_EXECUTABLE
+    MDSplus_jScope_EXECUTABLE
+    MDSplus_jTraverser_EXECUTABLE
+    MDSplus_jTraverser2_EXECUTABLE
+)
